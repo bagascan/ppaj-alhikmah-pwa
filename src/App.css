@@ -1,38 +1,72 @@
-.App {
-  text-align: center;
+:root {
+  --primary-color: #007bff;
+  --secondary-color: #6c757d;
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --info-color: #17a2b8;
+  --light-color: #f8f9fa;
+  --dark-color: #343a40;
+  --white-color: #ffffff;
+  --card-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  --border-radius: 8px;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.card {
+  border: none;
+  border-radius: var(--border-radius);
+  box-shadow: var(--card-shadow);
+  transition: all 0.3s ease-in-out;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.navbar {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.bottom-nav {
+  box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+  background-color: var(--white-color) !important;
+}
+
+.bottom-nav .nav-link {
+  color: var(--secondary-color);
+  font-size: 1.2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 4px;
 }
 
-.App-link {
-  color: #61dafb;
+.bottom-nav .nav-link.active {
+  color: var(--primary-color);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.bottom-nav .nav-link .icon {
+  font-size: 1.5rem;
+}
+
+/* Perbaikan untuk menu yang padat */
+.bottom-nav .nav-link {
+  flex-basis: 0; /* Izinkan item untuk tumbuh dari ukuran 0 */
+  flex-grow: 1;  /* Bagikan ruang kosong secara merata */
+  min-width: 0;  /* Izinkan item untuk menyusut di bawah ukuran kontennya */
+}
+.page-container {
+  padding-top: 70px; /* Adjust for top nav */
+  padding-bottom: 80px; /* Adjust for bottom nav */
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
 }

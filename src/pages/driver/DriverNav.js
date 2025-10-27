@@ -401,7 +401,6 @@ function DriverNav() {
                   pickupList={studentList.filter(s => s.tripStatus === 'at_home')} // Hanya kirim yang relevan
                   targetSchools={targetSchools}
                   initialPosition={initialPosition}
-                  realtimeLocation={realtimeLocation}
                 />
               </MapContainer>
             ) : (

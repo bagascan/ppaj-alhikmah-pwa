@@ -28,7 +28,7 @@ const schoolIcon = new L.Icon({
 });
 
 // Komponen Peta untuk Supir (sudah diperbaiki dan ditingkatkan)
-function DriverMap({ route, pickupList, targetSchools, initialPosition, realtimeLocation }) {
+function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
   // ... (no changes in this component)
   const driverMarkerRef = useRef(null);
   const [rotationAngle, setRotationAngle] = useState(0);

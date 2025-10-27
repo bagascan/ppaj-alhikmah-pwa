@@ -31,7 +31,7 @@ export async function subscribeUser(userId) {
     return;
   }
 
-  const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
   if (!vapidPublicKey) {
     console.error('VAPID public key not found. Cannot subscribe for push notifications.');
     return;

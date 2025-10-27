@@ -192,4 +192,22 @@ router.post('/change-password', auth, async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/pusher
+// @desc    Authenticate user for Pusher private channels
+// @access  Private
+router.post('/pusher', auth, (req, res) => {
+  const socketId = req.body.socket_id;
+  const channel = req.body.channel_name;
+  
+  // Data pengguna yang akan tersedia di channel
+  const presenseData = {
+    user_id: req.user.profileId,
+    user_info: { name: req.user.name, role: req.user.role }
+  };
+
+  // Gunakan instance pusher dari middleware
+  const authResponse = req.pusher.authorizeChannel(socketId, channel, presenseData);
+  res.send(authResponse);
+});
+
 module.exports = router;

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Chat = require('../models/Chat');
+const auth = require('../auth');
 
 // @route   GET api/chat/:room
 // @desc    Get chat history for a specific room
@@ -13,6 +14,32 @@ router.get('/:room', async (req, res) => {
     res.json(messages);
   } catch (err) {
     console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   POST api/chat
+// @desc    Save a new message and broadcast it
+// @access  Private
+router.post('/', auth, async (req, res) => {
+  const { room, sender, message } = req.body;
+
+  if (!room || !sender || !message) {
+    return res.status(400).json({ msg: 'Room, sender, dan message dibutuhkan.' });
+  }
+
+  try {
+    const newMessage = new Chat({ room, sender, message });
+    await newMessage.save();
+
+    // Trigger event ke Pusher
+    // Channel dibuat private untuk keamanan, misal: 'private-chat-room-xyz'
+    const channelName = `private-chat-${room}`;
+    req.pusher.trigger(channelName, 'new-message', newMessage);
+
+    res.status(201).json(newMessage);
+  } catch (err) {
+    console.error('Gagal menyimpan pesan chat:', err);
     res.status(500).send('Server Error');
   }
 });

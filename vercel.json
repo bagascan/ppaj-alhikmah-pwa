@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "functions": {
+    "backend/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "builds": [
     {
       "src": "backend/index.js",
@@ -20,13 +26,13 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/index.html"
     }
   ],
   "crons": [
     {
       "path": "/api/cron/reset-status",
-      "schedule": "0 3 * * *"
+      "schedule": "0 20 * * *"
     }
   ]
 }

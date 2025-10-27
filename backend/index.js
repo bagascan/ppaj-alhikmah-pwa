@@ -1,11 +1,8 @@
 
 const express = require('express');
-const http = require('http');
 const mongoose = require('mongoose');
-const cron = require('node-cron'); // Impor node-cron
 const webpush = require('web-push'); // Impor web-push
-const Chat = require('./models/Chat'); // Impor model Chat
-const { Server } = require('socket.io');
+const Pusher = require('pusher');
 const cors = require('cors');
 const https = require('https'); // Tambahkan modul https
 require('dotenv').config();
@@ -13,8 +10,22 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 app.use(express.json()); // Middleware untuk parsing JSON body
-const server = http.createServer(app);
 const Student = require('./models/Student'); // Impor model Student
+
+// Inisialisasi Pusher
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER,
+  useTLS: true
+});
+
+// Middleware untuk melampirkan instance Pusher ke setiap request
+app.use((req, res, next) => {
+  req.pusher = pusher;
+  next();
+});
 
 // Konfigurasi VAPID Keys untuk Web Push
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
@@ -24,28 +35,10 @@ if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails('mailto:admin@example.com', vapidPublicKey, vapidPrivateKey);
 }
 
-const io = new Server(server, {
-  cors: {
-    origin: [
-      "https://ppaj-alhikmah.vercel.app", // URL Vercel Anda
-      "http://localhost:3000" // Untuk development lokal
-    ],
-    methods: ["GET", "POST"],
-  }
-});
-
-// Middleware untuk melampirkan instance 'io' ke setiap request
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
-const PORT = process.env.PORT || 5000;
-
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.log(err));
+if (mongoose.connection.readyState !== 1) {
+  mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+}
 
 app.get('/', (req, res) => {
   res.send('PPAJ Al-Hikmah Backend is running!');
@@ -111,61 +104,15 @@ app.post('/api/route', (req, res) => {
   ghRequest.end();
 });
 
-// Socket.IO connection
-io.on('connection', (socket) => {
-  console.log('a user connected:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('user disconnected:', socket.id);
-  });
-
-  // Example: Listen for location updates from a driver
-  socket.on('updateLocation', (data) => {
-    // Broadcast the location to all connected parents
-    console.log('[DEBUG] Server: Menerima "updateLocation" dari supir:', data);
-    io.emit('locationUpdated', data);
-    console.log('[DEBUG] Server: Menyiarkan "locationUpdated" ke semua klien.');
-  });
-
-  // Bergabung ke ruang obrolan
-  socket.on('joinRoom', (room) => {
-    socket.join(room);
-    console.log(`User ${socket.id} joined room: ${room}`);
-  });
-
-  // Menerima dan menyimpan pesan baru
-  socket.on('sendMessage', async (data, callback) => {
-    const { room, sender, message } = data;
-    const newMessage = new Chat({ room, sender, message });
-
-    try {
-      await newMessage.save();
-      // Siarkan pesan baru ke semua orang di ruang obrolan yang sama
-      io.to(room).emit('receiveMessage', newMessage);
-      callback({ status: 'ok' }); // Kirim konfirmasi kembali ke pengirim
-    } catch (error) {
-      console.error('Gagal menyimpan pesan chat:', error);
-      callback({ status: 'error' });
-    }
-  });
-});
-
-
-// --- TUGAS TERJADWAL UNTUK MERESET STATUS SISWA ---
-// Jadwal ini akan berjalan setiap hari pada pukul 03:00 pagi (Waktu Indonesia Barat).
-cron.schedule('0 3 * * *', async () => {
-  console.log('[CRON] Menjalankan tugas reset status siswa pada pukul 03:00 WIB.');
+// Endpoint untuk Cron Job yang akan dipanggil oleh Vercel
+app.get('/api/cron/reset-status', async (req, res) => {
+  console.log('[CRON] Menjalankan tugas reset status siswa via Vercel Cron.');
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayString = today.toISOString().split('T')[0];
 
-    // 1. Cari semua siswa yang punya jadwal untuk hari ini
-    const studentsWithNextDaySchedule = await Student.find({ 
-      'nextDayService.date': { $gte: today } 
-    });
+    const studentsWithNextDaySchedule = await Student.find({ 'nextDayService.date': { $gte: today } });
 
-    // 2. Terapkan jadwal tersebut ke field 'service' dan 'tripStatus'
     for (const student of studentsWithNextDaySchedule) {
       const newService = {
         pickup: student.nextDayService.pickup,
@@ -174,20 +121,18 @@ cron.schedule('0 3 * * *', async () => {
       const newTripStatus = student.nextDayService.isAbsent ? 'absent' : 'at_home';
       await Student.updateOne({ _id: student._id }, { $set: { service: newService, tripStatus: newTripStatus } });
     }
-    console.log(`[CRON] ${studentsWithNextDaySchedule.length} jadwal harian telah diterapkan.`);
 
-    // 3. Reset status siswa lain yang tidak punya jadwal khusus
     const resetResult = await Student.updateMany({ 'nextDayService.date': { $ne: today } }, { $set: { tripStatus: 'at_home' } });
-    console.log(`[CRON] ${resetResult.modifiedCount} status siswa lainnya telah di-reset.`);
 
+    res.status(200).json({
+      message: 'Cron job executed successfully.',
+      appliedSchedules: studentsWithNextDaySchedule.length,
+      resetStudents: resetResult.modifiedCount
+    });
   } catch (error) {
     console.error('[CRON] Terjadi error saat mereset status siswa:', error);
+    res.status(500).json({ message: 'Cron job failed.', error: error.message });
   }
-}, {
-  scheduled: true,
-  timezone: "Asia/Jakarta"
 });
 
-console.log('[CRON] Tugas harian untuk reset status siswa telah dijadwalkan pada pukul 03:00 WIB.');
-
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+module.exports = app;

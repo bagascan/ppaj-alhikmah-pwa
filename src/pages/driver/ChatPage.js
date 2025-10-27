@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, InputGroup, Spinner, Alert } from 'react-bootstrap';
 import { useParams } from 'react-router-dom';
 import { BsSend } from 'react-icons/bs';
-import { socket } from '../../socket';
+import pusher from '../../pusher';
 import api from '../../api';
 import { toast } from 'react-toastify';
 
@@ -44,9 +44,6 @@ function DriverChatPage() {
         const chatRoomId = [driverUser.id, parentId].sort().join('-');
         setRoom(chatRoomId);
 
-        // 4. Bergabung ke ruang obrolan di server
-        socket.emit('joinRoom', chatRoomId);
-
         // 5. Ambil riwayat chat
         const historyRes = await api.get(`/chat/${chatRoomId}`);
         setMessages(historyRes.data);
@@ -55,6 +52,15 @@ function DriverChatPage() {
         await api.put(`/chat/read/${chatRoomId}`, { readerId: driverUser.id });
         // Beri tahu komponen lain (seperti BottomNav) bahwa pesan telah dibaca
         window.dispatchEvent(new Event('messagesRead'));
+
+        // Subscribe ke channel Pusher
+        const channel = pusher.subscribe(`private-chat-${chatRoomId}`);
+        channel.bind('new-message', (message) => {
+          setMessages(prevMessages => [...prevMessages, message]);
+        });
+
+        // Cleanup
+        return () => pusher.unsubscribe(`private-chat-${chatRoomId}`);
       } catch (err) {
         setError(err.message);
         toast.error('Gagal memulai sesi chat.');
@@ -64,17 +70,6 @@ function DriverChatPage() {
     };
 
     initializeChat();
-
-    // Listener untuk pesan baru yang masuk
-    const handleReceiveMessage = (message) => {
-      setMessages(prevMessages => [...prevMessages, message]);
-    };
-    socket.on('receiveMessage', handleReceiveMessage);
-
-    // Cleanup listener saat komponen di-unmount
-    return () => {
-      socket.off('receiveMessage', handleReceiveMessage);
-    };
   }, [parentId]); // Jalankan ulang jika parentId berubah
 
   // Auto-scroll setiap kali ada pesan baru
@@ -82,19 +77,15 @@ function DriverChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (newMessage.trim() && room && currentUser) {
-      const messageData = {
-        room: room,
-        sender: currentUser,
-        message: newMessage,
-      };
-      socket.emit('sendMessage', messageData, (response) => {
-        if (response.status !== 'ok') {
-          toast.error('Gagal mengirim pesan.');
-        }
-      });
+      try {
+        // Kirim pesan via API, backend akan trigger Pusher
+        await api.post('/chat', { room, sender: currentUser, message: newMessage });
+      } catch (error) {
+        toast.error("Gagal mengirim pesan.");
+      }
       setNewMessage('');
     }
   };

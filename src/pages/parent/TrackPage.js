@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Card, Spinner, Alert, Button } from 'react-bootstrap';
 import L from 'leaflet';
-import { socket } from '../../socket';
+import pusher from '../../pusher';
 
 // Ikon untuk shuttle
 const vehicleIcon = L.divIcon({
@@ -29,19 +29,22 @@ function DriverMarker({ driver, map, isAutoCentering, isFirstDriver }) {
 
   // Update posisi marker via socket
   useEffect(() => {
-    const handleLocationUpdate = (data) => {
-      if (data.driverId === driver._id && markerRef.current) {
-        const newPos = [data.location.lat, data.location.lng];
-        markerRef.current.setLatLng(newPos);
-        if (isAutoCentering && isFirstDriver) {
-          map.panTo(newPos);
+    // Subscribe ke channel publik untuk update lokasi
+    const channel = pusher.subscribe('tracking-channel');
+
+    // Bind ke event 'location-update'
+    channel.bind('location-update', (data) => {
+        if (data.driverId === driver._id && markerRef.current) {
+            const newPos = [data.location.lat, data.location.lng];
+            markerRef.current.setLatLng(newPos);
+            if (isAutoCentering && isFirstDriver) {
+                map.panTo(newPos);
+            }
+            markerRef.current.setTooltipContent(`Supir: <strong>${driver.name || 'N/A'}</strong><br />Kendaraan: ${driver.vehicle || 'N/A'}`);
         }
-        // Update tooltip untuk menandakan lokasi real-time
-        markerRef.current.setTooltipContent(`Supir: <strong>${driver.name || 'N/A'}</strong><br />Kendaraan: ${driver.vehicle || 'N/A'}`);
-      }
-    };
-    socket.on('locationUpdated', handleLocationUpdate);
-    return () => socket.off('locationUpdated', handleLocationUpdate);
+    });
+
+    return () => pusher.unsubscribe('tracking-channel');
   }, [driver._id, driver.name, driver.vehicle, map, isAutoCentering, isFirstDriver]);
 
   return null; // Komponen ini tidak merender elemen DOM secara langsung

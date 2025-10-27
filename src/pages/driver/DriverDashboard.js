@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { socket } from '../../socket';
-import { subscribeUser } from '../../utils/push-notifications';
 import DriverHome from './DriverHome'; // DriverHome sekarang akan mengelola logikanya sendiri
 import PickupPage from './PickupPage'; // Pastikan ini diimpor
 import DriverNav from './DriverNav'; // Pastikan ini diimpor
@@ -12,38 +10,32 @@ import DriverProfile from './DriverProfile';
 import ChatListPage from './ChatListPage';
 import DriverChatPage from './ChatPage';
 import ChangePasswordPage from './ChangePasswordPage';
+import { useAuth } from '../../hooks/useAuth';
+import api from '../../api';
+import { subscribeUser } from '../../utils/push-notifications';
 
 function DriverDashboard() {
   const [isTracking, setIsTracking] = useState(false);
   const [locationError, setLocationError] = useState(null);
-  const [driverId, setDriverId] = useState(null);
-  const [loading, setLoading] = useState(true);
   const watchIdRef = useRef(null);
+  const { auth, loading: authLoading } = useAuth();
+  const driverId = auth?.user?.profileId;
 
   // Mengambil ID supir sekali saat komponen dimuat
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      // Jika tidak ada token, jangan lakukan apa-apa. Biarkan ProtectedRoute bekerja.
-      setLoading(false);
+    // Jangan lakukan apa-apa jika otentikasi masih loading atau tidak valid
+    if (authLoading) {
       return;
     }
 
-    const user = JSON.parse(atob(token.split('.')[1])).user;
-
     // Pastikan role adalah supir dan ada profileId
-    if (user && user.role === 'driver' && user.profileId) {
-      const currentDriverId = user.profileId;
-      setDriverId(currentDriverId);
-
+    if (auth && auth.user.role === 'driver' && auth.user.profileId) {
       // Daftarkan supir untuk notifikasi push
-      subscribeUser(currentDriverId);
-      setLoading(false);
+      subscribeUser(auth.user.profileId);
     } else {
       // Jika token ada tapi tidak valid untuk supir, tampilkan error.
       setLocationError("Gagal memverifikasi data supir dari sesi login.");
       toast.error("Sesi login tidak valid untuk supir.");
-      setLoading(false);
     }
 
     // Fungsi cleanup ini hanya akan berjalan jika DriverDashboard di-unmount (misal: logout)
@@ -52,7 +44,7 @@ function DriverDashboard() {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, []);
+  }, [auth, authLoading]);
 
   // Fungsi untuk menangani error geolokasi dengan lebih baik
   const handleLocationError = (error) => {
@@ -87,22 +79,14 @@ function DriverDashboard() {
           (initialPosition) => {
               toast.success('Sinyal lokasi ditemukan! Pelacakan diaktifkan.');
               const { latitude, longitude } = initialPosition.coords;
-              const locationData = {
-                  driverId: driverId,
-                  location: { lat: latitude, lng: longitude },
-              };
-              socket.emit('updateLocation', locationData);
+              api.post('/drivers/location', { lat: latitude, lng: longitude });
               setLocationError(null);
 
               // Langkah 2: Setelah lokasi awal didapat, mulai watchPosition untuk update real-time
               watchIdRef.current = navigator.geolocation.watchPosition(
                   (position) => {
                       const { latitude, longitude } = position.coords;
-                      const locationData = {
-                          driverId: driverId,
-                          location: { lat: latitude, lng: longitude },
-                      };
-                      socket.emit('updateLocation', locationData);
+                      api.post('/drivers/location', { lat: latitude, lng: longitude });
                       setLocationError(null); // Hapus error jika berhasil
                   },
                   handleLocationError, // Gunakan handler error yang sudah dibuat
@@ -126,7 +110,7 @@ function DriverDashboard() {
   return (
     <Container>
       <Routes>
-        <Route path="/" element={<DriverHome loading={loading} isTracking={isTracking} locationError={locationError} handleToggleTracking={handleToggleTracking} driverId={driverId} />} />
+        <Route path="/" element={<DriverHome loading={authLoading} isTracking={isTracking} locationError={locationError} handleToggleTracking={handleToggleTracking} driverId={driverId} />} />
         <Route path="pickup" element={<PickupPage />} />
         <Route path="dropoff" element={<DropoffPage />} />
         {/* Untuk DriverNav, kita akan mengambil lokasi dari DriverHome jika diperlukan nanti,

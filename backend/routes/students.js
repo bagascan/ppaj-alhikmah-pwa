@@ -286,7 +286,11 @@ router.put('/:id', auth, async (req, res) => {
           status: tripStatus,
           message: statusMessage
         };
-        req.io.to(parentId).emit('statusUpdate', notificationData);
+        // Menggunakan Pusher
+        // Channel dibuat private untuk keamanan, misal: 'private-parent-wali1'
+        const channelName = `private-parent-${parentId}`;
+        req.pusher.trigger(channelName, 'student-status-update', notificationData);
+        console.log(`[Pusher] Triggered 'student-status-update' on channel '${channelName}'`);
 
         // Kirim Web Push Notification
         try {

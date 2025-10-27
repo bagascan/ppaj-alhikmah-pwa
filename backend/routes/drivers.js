@@ -155,4 +155,28 @@ router.post('/handover', auth, async (req, res) => {
   }
 });
 
+// @route   POST api/drivers/location
+// @desc    Receive location update from a driver and broadcast it
+// @access  Private (Driver)
+router.post('/location', auth, async (req, res) => {
+  if (req.user.role !== 'driver') {
+    return res.status(403).json({ msg: 'Akses ditolak.' });
+  }
+
+  const { lat, lng } = req.body;
+  const driverId = req.user.profileId;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ msg: 'Latitude dan Longitude dibutuhkan.' });
+  }
+
+  const payload = {
+    driverId: driverId,
+    location: { lat, lng }
+  };
+
+  req.pusher.trigger('tracking-channel', 'location-update', payload);
+  res.status(200).json({ msg: 'Location updated' });
+});
+
 module.exports = router;

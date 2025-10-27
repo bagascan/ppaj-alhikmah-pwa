@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, Button, Alert, Spinner, Modal, Form } from 'react-bootstrap';
 import { BsBroadcast, BsStopCircle, BsExclamationTriangle } from 'react-icons/bs';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import api from '../../api'; // Gunakan instance api kustom
 
 function RequestChangeModal({ show, onHide, driverId }) {
   const [reason, setReason] = useState('');
@@ -15,7 +15,7 @@ function RequestChangeModal({ show, onHide, driverId }) {
     }
     setIsSending(true);
     try {
-      const res = await axios.post('/api/notifications/request-change', { driverId, reason });
+      const res = await api.post('/notifications/request-change', { driverId, reason });
       toast.success(res.data.msg || "Permohonan berhasil dikirim.");
       setReason('');
       onHide();

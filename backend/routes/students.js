@@ -329,34 +329,4 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// @route   GET api/students/for-parent-tracking
-// @desc    Get students and relevant drivers for a logged-in parent
-// @access  Private (Parent)
-router.get('/for-parent-tracking', auth, async (req, res) => {
-  if (req.user.role !== 'parent') {
-    return res.status(403).json({ msg: 'Akses ditolak: Hanya untuk wali murid.' });
-  }
-
-  try {
-    const parentName = req.user.profileId;
-
-    // 1. Cari semua siswa milik wali murid ini
-    const myStudents = await Student.find({ parent: parentName });
-    if (myStudents.length === 0) {
-      return res.status(404).json({ msg: "Siswa tidak ditemukan." });
-    }
-
-    // 2. Dapatkan semua zona unik dari siswa-siswa tersebut
-    const uniqueZones = [...new Set(myStudents.map(s => s.zone))];
-
-    // 3. Cari semua supir yang bertugas di zona-zona tersebut
-    const relevantDrivers = await Driver.find({ zone: { $in: uniqueZones } });
-
-    res.json({ myStudents, relevantDrivers });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
 module.exports = router;

@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../api'; // Gunakan instance api kustom
 import { ListGroup, Spinner, Alert, Card } from 'react-bootstrap';
 
 function ParentHistoryPage() {
   const [tripHistory, setTripHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [parentName, setParentName] = useState(null);
 
-  // Di aplikasi nyata, nama ini akan didapat dari sesi login
-  const parentName = "wali3";
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const user = JSON.parse(atob(token.split('.')[1])).user;
+      if (user.role === 'parent') setParentName(user.profileId);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!parentName) return; // Jangan fetch jika parentName belum ada
       try {
-        const historyRes = await axios.get(`/api/trips/history/parent/${parentName}`);
+        const historyRes = await api.get(`/trips/history/parent/${parentName}`);
         setTripHistory(historyRes.data);
       } catch (err) {
         setError("Gagal memuat riwayat perjalanan.");
@@ -23,7 +30,7 @@ function ParentHistoryPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [parentName]);
 
   if (loading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat riwayat...</p></div>;

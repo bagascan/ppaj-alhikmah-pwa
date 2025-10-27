@@ -174,6 +174,11 @@ router.post('/change-password', auth, async (req, res) => {
       return res.status(400).json({ msg: 'Password saat ini salah.' });
     }
 
+    // 2a. Validasi password baru
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ msg: 'Password baru harus memiliki minimal 8 karakter.' });
+    }
+
     // 3. Hash dan simpan password baru
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);

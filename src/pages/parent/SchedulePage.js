@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Spinner, Alert, ListGroup } from 'react-bootstrap';
-import axios from 'axios';
+import { Card, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import api from '../../api';
 

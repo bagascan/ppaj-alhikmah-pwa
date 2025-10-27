@@ -116,7 +116,7 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition, realtime
 
     socket.on('locationUpdated', handleLocationUpdate);
     return () => socket.off('locationUpdated', handleLocationUpdate);
-  }, [initialPosition, map, vehicleIconWithRotation]);
+  }, [initialPosition, map, vehicleIconWithRotation, isAutoCentering]);
   return (
     <>
       <Button variant={isAutoCentering ? "primary" : "secondary"} size="sm" style={{ position: 'absolute', top: 10, left: 50, zIndex: 1000 }} onClick={() => setIsAutoCentering(!isAutoCentering)}>

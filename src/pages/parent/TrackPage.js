@@ -25,7 +25,7 @@ function DriverMarker({ driver, map, isAutoCentering, isFirstDriver }) {
       markerRef.current = L.marker(initialPos, { icon: vehicleIcon }).addTo(map);
       markerRef.current.bindTooltip(`Supir: <strong>${driver.name || 'N/A'}</strong><br />Kendaraan: ${driver.vehicle || 'N/A'}<br /><em>Posisi di garasi (lokasi belum aktif)</em>`);
     }
-  }, [driver, map]);
+  }, [driver, map, driver.name, driver.vehicle]);
 
   // Update posisi marker via socket
   useEffect(() => {

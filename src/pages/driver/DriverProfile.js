@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
-import { Card, Badge, Spinner, Alert, ListGroup, Button } from 'react-bootstrap';
+import { Card, Badge, Spinner, Alert, ListGroup } from 'react-bootstrap';
 import { BsPersonVcard, BsTelephone, BsTruck } from 'react-icons/bs';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 function DriverProfile() {
   const [driver, setDriver] = useState(null);
@@ -47,12 +47,6 @@ function DriverProfile() {
   if (error || !driver) {
     return <Alert variant="danger">{error || "Data supir tidak ditemukan."}</Alert>;
   }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-    window.location.reload();
-  };
 
   return (
     <>

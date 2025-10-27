@@ -94,7 +94,7 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // 3. Kirim email
-    const resetURL = `http://localhost:3000/reset-password/${resetToken}`;
+    const resetURL = `https://ppaj-alhikmah.vercel.app:3000/reset-password/${resetToken}`;
 
     let defaultClient = SibApiV3Sdk.ApiClient.instance;
     let apiKey = defaultClient.authentications['api-key'];

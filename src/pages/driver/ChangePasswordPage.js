@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Button, Card, Container, Alert } from 'react-bootstrap';
-import axios from 'axios';
+import api from '../../api'; // Gunakan instance api kustom
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,23 +27,11 @@ function ChangePasswordPage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error('Sesi Anda telah berakhir. Silakan login kembali.');
-        navigate('/login');
-        return;
-      }
-
-      const config = {
-        headers: {
-          'x-auth-token': token,
-        },
-      };
-
-      await axios.post('/api/auth/change-password', {
+      // Interceptor di `api.js` akan menangani token secara otomatis
+      await api.post('/auth/change-password', {
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword,
-      }, config);
+      });
 
       toast.success('Password berhasil diubah!');
       navigate('/driver/profile'); // Kembali ke halaman profil

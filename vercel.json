@@ -1,8 +1,14 @@
 {
   "version": 2,
+  "functions": {
+    "backend/api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "builds": [
     {
-      "src": "backend/index.js",
+      "src": "backend/api/index.js",
       "use": "@vercel/node"
     },
     {
@@ -16,17 +22,17 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/backend/index.js"
+      "dest": "/backend/api/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/index.html"
     }
   ],
   "crons": [
     {
       "path": "/api/cron/reset-status",
-      "schedule": "0 3 * * *"
+      "schedule": "0 20 * * *"
     }
   ]
 }

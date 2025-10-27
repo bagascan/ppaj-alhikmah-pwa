@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "backend/index.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "builds": [
     {
       "src": "backend/index.js",

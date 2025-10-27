@@ -26,8 +26,11 @@ if (vapidPublicKey && vapidPrivateKey) {
 
 const io = new Server(server, {
   cors: {
-    origin: "https://ppaj-alhikmah.vercel.app:3000", // Allow requests from the React app
-    methods: ["GET", "POST"]
+    origin: [
+      "https://ppaj-alhikmah.vercel.app", // URL Vercel Anda
+      "http://localhost:3000" // Untuk development lokal
+    ],
+    methods: ["GET", "POST"],
   }
 });
 

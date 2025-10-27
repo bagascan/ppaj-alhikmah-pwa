@@ -1,6 +1,11 @@
 import { io } from 'socket.io-client';
 
-// Gunakan URL dari environment variable jika ada, jika tidak, gunakan localhost
-const URL = process.env.REACT_APP_API_URL || 'https://ppaj-alhikmah.vercel.app:5000';
-
-export const socket = io(URL);
+// Untuk production (Vercel), kita tidak perlu menentukan URL.
+// Socket.IO akan otomatis terhubung ke host yang sama.
+// Untuk development (lokal), kita akan terhubung ke proxy di package.json.
+const URL = process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:5000';
+export const socket = io(URL, {
+  // Vercel merekomendasikan untuk secara eksplisit menggunakan websocket
+  // karena arsitektur serverless-nya.
+  transports: ['websocket'],
+});

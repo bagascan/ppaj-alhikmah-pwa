@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api'; // Ganti axios dengan api
 import { MapContainer, TileLayer, FeatureGroup, GeoJSON } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
-import { Button, Card } from 'react-bootstrap';
+import { Card } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 // Import CSS untuk leaflet dan leaflet-draw
 import 'leaflet/dist/leaflet.css';

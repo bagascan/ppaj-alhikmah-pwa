@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import api from '../../api';
 import { socket } from '../../socket';
 import { subscribeUser } from '../../utils/push-notifications';
 import DriverHome from './DriverHome'; // DriverHome sekarang akan mengelola logikanya sendiri
@@ -46,16 +45,6 @@ function DriverDashboard() {
       toast.error("Sesi login tidak valid untuk supir.");
       setLoading(false);
     }
-
-    const fetchDriverData = async () => {
-      // Di masa depan, jika Anda perlu mengambil data tambahan tentang supir,
-      // Anda bisa melakukannya di sini menggunakan `user.profileId`.
-      try {
-        // Contoh: const res = await api.get(`/drivers/${user.profileId}`);
-      } catch (error) {
-        console.error("Gagal mengambil detail supir", error);
-      }
-    };
 
     // Fungsi cleanup ini hanya akan berjalan jika DriverDashboard di-unmount (misal: logout)
     return () => {

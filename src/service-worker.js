@@ -4,7 +4,7 @@ import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { StaleWhileRevalidate, NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { NetworkFirst } from 'workbox-strategies';
 
 // Perintah ini memastikan bahwa service worker yang baru akan mengambil
 // alih halaman sesegera mungkin setelah aktif.

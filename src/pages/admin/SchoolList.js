@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api';
-import { Card, Button, Modal, Form, Row, Col, InputGroup } from 'react-bootstrap';
+import { Card, Button, Modal, Form, InputGroup } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { BsPencil, BsTrash, BsSearch } from 'react-icons/bs';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
@@ -28,7 +28,7 @@ function SchoolModal({ show, onHide, school, onSave }) {
   });
 
   const [formData, setFormData] = useState({ name: '', address: '', location: [0, 0] });  
-  const [isGeocoding, setIsGeocoding] = useState(false);
+  const isGeocoding = false; // Nilai ini tidak pernah berubah, jadi tidak perlu state.
 
   useEffect(() => {
     if (school) {
@@ -43,10 +43,6 @@ function SchoolModal({ show, onHide, school, onSave }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleLocationChange = (e, index) => {
-   // console.log("Direct location change is disabled.");
   };
 
   const handleMapClick = (latlng) => {
@@ -131,7 +127,7 @@ function SchoolModal({ show, onHide, school, onSave }) {
 }
 
 function ClickHandler({ setLocation }) {
-  const map = useMapEvents({
+  useMapEvents({
     click: (e) => {
       setLocation(e.latlng);
     },

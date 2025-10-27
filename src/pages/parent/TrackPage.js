@@ -42,7 +42,7 @@ function DriverMarker({ driver, map, isAutoCentering, isFirstDriver }) {
     };
     socket.on('locationUpdated', handleLocationUpdate);
     return () => socket.off('locationUpdated', handleLocationUpdate);
-  }, [driver._id, map, isAutoCentering, isFirstDriver]);
+  }, [driver._id, driver.name, driver.vehicle, map, isAutoCentering, isFirstDriver]);
 
   return null; // Komponen ini tidak merender elemen DOM secara langsung
 }

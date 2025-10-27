@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { Card, Badge, Spinner, Alert, ListGroup } from 'react-bootstrap';
 import { BsPersonVcard, BsTelephone, BsTruck } from 'react-icons/bs';
-import { useNavigate } from 'react-router-dom';
 
 function DriverProfile() {
   const [driver, setDriver] = useState(null);
@@ -10,7 +9,6 @@ function DriverProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const navigate = useNavigate();
   useEffect(() => {
     const fetchData = async () => {
       try {

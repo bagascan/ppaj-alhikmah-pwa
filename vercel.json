@@ -1,41 +1,32 @@
 {
   "version": 2,
-  "functions": {
-    "backend/api/index.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "builds": [
     {
-      "src": "backend/api/index.js",
-      "use": "@vercel/node",
-      "config": { "includeFiles": ["backend/**"] }
+      "src": "backend/index.js",
+      "use": "@vercel/node"
     },
     {
       "src": "package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "build" }
+      "config": {
+        "distDir": "build"
+      }
     }
   ],
   "routes": [
     {
-      "src": "/socket.io/",
-      "dest": "/backend/api/index.js"
-    },
-    {
       "src": "/api/(.*)",
-      "dest": "/backend/api/index.js"
+      "dest": "/backend/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/$1"
     }
   ],
   "crons": [
     {
       "path": "/api/cron/reset-status",
-      "schedule": "0 20 * * *" 
+      "schedule": "0 3 * * *"
     }
   ]
 }

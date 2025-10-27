@@ -3,22 +3,25 @@ import { Spinner, Alert, Card } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import api from '../../api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../hooks/useAuth'; // Impor hook baru
 
 function ChatListPage() {
   const [parentList, setParentList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { auth, loading: authLoading } = useAuth(); // Gunakan hook
 
   useEffect(() => {
     const fetchParentList = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error("Sesi tidak valid.");
-        const user = JSON.parse(atob(token.split('.')[1])).user;
-        if (user.role !== 'driver' || !user.profileId) throw new Error("Akses ditolak.");
+      if (authLoading || !auth || auth.user.role !== 'driver') {
+        if (!authLoading) setError("Akses ditolak.");
+        setDataLoading(false);
+        return;
+      }
 
+      try {
         // 1. Ambil data supir yang login
-        const driverRes = await api.get(`/drivers/${user.profileId}`);
+        const driverRes = await api.get(`/drivers/${auth.user.profileId}`);
         const myDriver = driverRes.data;
 
         // 2. Ambil semua siswa
@@ -35,14 +38,14 @@ function ChatListPage() {
         setError(err.message);
         toast.error("Gagal memuat daftar wali murid.");
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
 
     fetchParentList();
-  }, []);
+  }, [auth, authLoading]);
 
-  if (loading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat daftar...</p></div>;
+  if (authLoading || dataLoading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat daftar...</p></div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
   return (

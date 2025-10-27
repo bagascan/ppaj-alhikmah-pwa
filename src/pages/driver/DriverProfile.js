@@ -2,43 +2,44 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { Card, Badge, Spinner, Alert, ListGroup } from 'react-bootstrap';
 import { BsPersonVcard, BsTelephone, BsTruck } from 'react-icons/bs';
+import { useAuth } from '../../hooks/useAuth'; // Impor hook baru
 
 function DriverProfile() {
   const [driver, setDriver] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { auth, loading: authLoading } = useAuth(); // Gunakan hook
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error("Sesi tidak valid.");
-        const user = JSON.parse(atob(token.split('.')[1])).user;
-        if (user.role !== 'driver' || !user.profileId) throw new Error("Akses ditolak atau data tidak lengkap.");
-
-        const driverRes = await api.get(`/drivers/${user.profileId}`);
-        const currentDriver = driverRes.data;
-
-        if (currentDriver) {
-          setDriver(currentDriver);
-          // Ambil riwayat perjalanan untuk supir ini
-          const historyRes = await api.get(`/trips/history/driver/${user.profileId}`);
-          setTripHistory(historyRes.data);
-        } else {
-          throw new Error("Tidak ada data supir di database.");
+      // Jangan fetch data jika otentikasi masih loading atau tidak ada
+      if (authLoading || !auth || auth.user.role !== 'driver') {
+        if (!authLoading) {
+          setError("Akses ditolak atau data tidak lengkap.");
+          setDataLoading(false);
         }
+        return;
+      }
+
+      try {
+        const [driverRes, historyRes] = await Promise.all([
+          api.get(`/drivers/${auth.user.profileId}`),
+          api.get(`/trips/history/driver/${auth.user.profileId}`)
+        ]);
+        setDriver(driverRes.data);
+        setTripHistory(historyRes.data);
       } catch (err) {
         setError("Gagal memuat data profil.");
         console.error(err);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [auth, authLoading]);
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat profil...</p></div>;
   }
 

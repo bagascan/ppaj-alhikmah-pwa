@@ -94,7 +94,7 @@ function DriverDashboard() {
               );
           },
           handleLocationError, // Gunakan handler error yang sama untuk getCurrentPosition
-          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 } // Timeout 20 detik untuk lokasi awal
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 } // Timeout 30 detik untuk lokasi awal
       );
 
     } else {

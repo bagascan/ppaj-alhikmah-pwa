@@ -308,7 +308,10 @@ function DriverNav() {
     return points;
   }, [initialPosition, studentList, targetSchools, realtimeLocation, tripType]);
 
+  // PERBAIKAN: Buat kunci string dari waypoints. Ini akan stabil dan tidak berubah
+  // jika isi array-nya sama, mencegah loop tak terbatas.
   const waypointsKey = useMemo(() => JSON.stringify(waypoints), [waypoints]);
+
 
   // Efek untuk fetch rute secara otomatis saat waypoints berubah
   useEffect(() => {
@@ -353,7 +356,7 @@ function DriverNav() {
       }
     };
     fetchRoute();
-  }, [waypointsKey, loggedInDriver, students, initialPosition, waypoints]); // Dependensi yang lengkap dan eksplisit
+  }, [waypointsKey, loggedInDriver, students]); // PERBAIKAN: Hapus waypoints dan initialPosition dari sini
 
   const handleSendEmergency = async (message) => {
     if (!loggedInDriver) {

@@ -20,6 +20,13 @@ const pusher = {
         // Perbarui header HANYA jika channel tersebut adalah private atau presence.
         // Ini mencegah error saat subscribe ke channel publik yang tidak memiliki config.auth.
         if (channelName.startsWith('private-') || channelName.startsWith('presence-')) {
+            // PERBAIKAN: Pastikan objek auth dan headers ada sebelum diakses.
+            // Ini untuk menangani kasus di mana langganan pertama adalah ke channel publik,
+            // yang mungkin menyebabkan Pusher tidak menginisialisasi config.auth.
+            if (!pusherInstance.config.auth) {
+                pusherInstance.config.auth = { headers: {} };
+            }
+
             pusherInstance.config.auth.headers['x-auth-token'] = localStorage.getItem('token');
         }
         return pusherInstance.subscribe(channelName);

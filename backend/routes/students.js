@@ -321,7 +321,13 @@ router.put('/:id', auth, async (req, res) => {
 
         // Kirim Web Push Notification
         try {
-          const subscriptions = await Subscription.find({ userId: parentId });
+          // PERBAIKAN KRITIS: Jangan gunakan nama wali murid (parentId) untuk mencari subscription.
+          // Cari akun User wali murid berdasarkan profileId (nama) untuk mendapatkan ObjectId-nya.
+          const parentUser = await User.findOne({ profileId: parentId });
+          if (!parentUser) {
+            throw new Error(`Akun User untuk wali murid ${parentId} tidak ditemukan.`);
+          }
+          const subscriptions = await Subscription.find({ userId: parentUser._id });
           const payload = JSON.stringify({ title: 'Update Status Antar-Jemput', body: notificationData.message, icon: '/logo192.png' });
 
           // PERBAIKAN DEFINITIF: Gunakan Promise.allSettled untuk mengirim notifikasi secara aman.

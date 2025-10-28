@@ -23,7 +23,7 @@ function AdminHome() {
   useEffect(() => {
     // Daftarkan admin untuk notifikasi push
     if (auth && auth.user.role === 'admin') {
-      subscribeUser('admin');
+      subscribeUser(auth.user.id); // PERBAIKAN: Gunakan user.id (ObjectId)
     }
     const fetchZones = async () => {
       try {

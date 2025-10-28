@@ -23,7 +23,7 @@ function urlBase64ToUint8Array(base64String) {
 
 /**
  * Mendaftarkan service worker untuk push notification dan mengirim subscription ke backend.
- * @param {string} userId - ID unik untuk user (misal: 'admin', 'parent-wali1', 'driver-supirA').
+ * @param {string} userId - ID unik untuk user (ObjectId dari database).
  */
 export async function subscribeUser(userId) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {

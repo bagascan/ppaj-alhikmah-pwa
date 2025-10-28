@@ -31,7 +31,7 @@ function DriverDashboard() {
     // Pastikan role adalah supir dan ada profileId
     if (auth && auth.user.role === 'driver' && auth.user.profileId) {
       // Daftarkan supir untuk notifikasi push
-      subscribeUser(auth.user.profileId);
+      subscribeUser(auth.user.id); // PERBAIKAN: Gunakan user.id (ObjectId)
     } else {
       // Jika token ada tapi tidak valid untuk supir, tampilkan error.
       setLocationError("Gagal memverifikasi data supir dari sesi login.");

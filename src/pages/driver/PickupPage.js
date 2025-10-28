@@ -33,12 +33,12 @@ function PickupPage() {
         setDriver(currentDriver);
 
         // Filter siswa: hanya yang di zona supir, aktif, dan berlangganan layanan jemput pagi
-        // DAN statusnya adalah 'at_home'
+        // DAN statusnya relevan untuk perjalanan pagi ('at_home' atau 'picked_up')
         const filteredStudents = studentsRes.data.filter(student => 
           student.zone === currentDriver.zone && // Hanya siswa di zona supir
           student.generalStatus === 'Active' &&
           student.service?.pickup === true &&
-          student.tripStatus === 'at_home' // Hanya tampilkan yang siap dijemput
+          ['at_home', 'picked_up'].includes(student.tripStatus) // Tampilkan yang siap dijemput & sudah dijemput
         );
 
         setStudentsInZone(filteredStudents.sort((a, b) => a.name.localeCompare(b.name))); // Urutkan berdasarkan nama
@@ -59,8 +59,12 @@ function PickupPage() {
 
   const handleUpdateStatus = async (studentId, newStatus) => {
     // Optimistic UI update for a responsive feel
-    // PERBAIKAN: Langsung hapus siswa dari daftar di halaman ini.
-    setStudentsInZone(prevStudents => prevStudents.filter(student => student._id !== studentId));
+    // PERBAIKAN: Update status siswa di dalam daftar, jangan dihapus.
+    // Siswa akan hilang dari daftar jika statusnya menjadi 'at_school' atau 'absent'.
+    setStudentsInZone(prevStudents => 
+      prevStudents.filter(student => student._id !== studentId || ['at_home', 'picked_up'].includes(newStatus))
+                  .map(student => student._id === studentId ? { ...student, tripStatus: newStatus } : student)
+    );
 
     try {
       await api.put(`/students/${studentId}`, { tripStatus: newStatus });
@@ -111,13 +115,15 @@ function PickupPage() {
                 </Col>
                 <Col xs="auto">
                   <ButtonGroup>
-                    {/* Tombol ini hanya akan muncul jika statusnya 'at_home' */}
-                    <Button variant="success" onClick={() => handleUpdateStatus(student._id, 'picked_up')}>
-                      Jemput
-                    </Button>
-                    <Button variant="outline-danger" onClick={() => handleUpdateStatus(student._id, 'absent')}>Absen</Button>
-                    {/* Tombol "Tiba di Sekolah" tidak lagi relevan di halaman ini */}
-                    {student.tripStatus === 'picked_up' && ( // Logika ini sebenarnya tidak akan pernah berjalan lagi, tapi kita biarkan untuk keamanan
+                    {student.tripStatus === 'at_home' && (
+                      <>
+                        <Button variant="success" onClick={() => handleUpdateStatus(student._id, 'picked_up')}>
+                          Jemput
+                        </Button>
+                        <Button variant="outline-danger" onClick={() => handleUpdateStatus(student._id, 'absent')}>Absen</Button>
+                      </>
+                    )}
+                    {student.tripStatus === 'picked_up' && (
                       <Button variant="info" onClick={() => handleUpdateStatus(student._id, 'at_school')}>
                         Tiba di Sekolah
                       </Button>

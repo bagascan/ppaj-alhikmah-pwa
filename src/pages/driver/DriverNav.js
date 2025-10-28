@@ -199,19 +199,12 @@ function DriverNav() {
   // Menggunakan logika filter yang sudah diperbarui sesuai model data Student.js dan diurutkan
   const studentList = useMemo(() => {
     if (!loggedInDriver || !students) return [];
-    if (tripType === 'pickup') {
-      return students.filter(student =>
-        student.zone === loggedInDriver.zone &&
-        student.generalStatus === 'Active' &&
-        student.service?.pickup === true
-      ).sort((a, b) => a.name.localeCompare(b.name));
-    } else { // tripType === 'dropoff'
-      return students.filter(student =>
-        student.zone === loggedInDriver.zone &&
-        student.generalStatus === 'Active' &&
-        student.service?.dropoff === true
-      ).sort((a, b) => a.name.localeCompare(b.name));
-    }
+    // Filter siswa berdasarkan zona, status aktif, dan layanan yang sesuai dengan tripType
+    return students.filter(student =>
+      student.zone === loggedInDriver.zone &&
+      student.generalStatus === 'Active' &&
+      (tripType === 'pickup' ? student.service?.pickup : student.service?.dropoff)
+    ).sort((a, b) => a.name.localeCompare(b.name));
   }, [students, loggedInDriver, tripType]);
 
   const initialPosition = useMemo(() => {

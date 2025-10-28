@@ -55,9 +55,8 @@ function DropoffPage() {
   }, [fetchData]);
 
   const handleUpdateStatus = async (studentId, newStatus) => {
-    setStudentsToDropoff(prevStudents =>
-      prevStudents.filter(student => student._id !== studentId)
-    );
+    // PERBAIKAN: Langsung hapus siswa dari daftar di halaman ini.
+    setStudentsToDropoff(prevStudents => prevStudents.filter(student => student._id !== studentId));
 
     try {
       await api.put(`/students/${studentId}`, { tripStatus: newStatus });

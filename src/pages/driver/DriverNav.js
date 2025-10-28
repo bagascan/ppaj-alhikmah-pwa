@@ -303,7 +303,12 @@ function DriverNav() {
     } catch (error) {
       console.error('[DEBUG] Gagal mengambil rute:', error);
       const errorMessage = error.response?.data?.message || "Gagal mengambil rute.";
-      //toast.warn(`Tidak dapat menghitung rute: ${errorMessage}`);
+      
+      // KODE DEBUG: Tampilkan data yang dikirim saat terjadi error
+      console.error('--- GAGAL MENGAMBIL RUTE ---');
+      console.error('Error Message:', errorMessage);
+      console.error('Waypoints yang Dikirim:', JSON.stringify(waypoints.points, null, 2));
+      console.error('-----------------------------');
     } finally {
       isFetching.current = false;
     }

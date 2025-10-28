@@ -200,6 +200,12 @@ router.post('/pusher', auth, (req, res) => {
   const channel = req.body.channel_name;
   let authResponse;
 
+  // PERBAIKAN DEFINITIF: Tambahkan pengecekan defensif.
+  // Jika karena alasan apapun middleware auth gagal melampirkan user, kirim error 403.
+  if (!req.user || !req.user.id) {
+    return res.status(403).send('Forbidden: User not authenticated for Pusher.');
+  }
+
   // Data pengguna yang akan dikirim ke Pusher.
   // user_id harus unik dan konsisten. Kita gunakan ObjectId dari user.
   const user_data = {

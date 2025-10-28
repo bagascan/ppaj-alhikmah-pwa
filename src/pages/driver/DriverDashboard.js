@@ -56,6 +56,11 @@ function DriverDashboard() {
     } else if (error.code === 3) { // TIMEOUT
       userFriendlyError = 'Waktu pencarian lokasi habis. Coba lagi di area dengan sinyal GPS yang lebih baik (misal: di luar ruangan).';
     }
+
+    // Jika error adalah timeout, hentikan pelacakan agar supir bisa mencoba lagi.
+    if (isTracking) {
+      setIsTracking(false);
+    }
     setLocationError(userFriendlyError);
     toast.error(userFriendlyError);
     console.error(errorMsg, error);
@@ -75,26 +80,45 @@ function DriverDashboard() {
 
       // Langkah 1: Coba dapatkan lokasi awal dengan timeout lebih panjang
       toast.info('Mencari sinyal lokasi...');
-      navigator.geolocation.getCurrentPosition(
-          (initialPosition) => {
-              toast.success('Sinyal lokasi ditemukan! Pelacakan diaktifkan.');
-              const { latitude, longitude } = initialPosition.coords;
-              api.post('/drivers/location', { lat: latitude, lng: longitude });
-              setLocationError(null);
+      const highAccuracyOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }; // Timeout 20 detik
+      const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }; // Timeout 10 detik
 
-              // Langkah 2: Setelah lokasi awal didapat, mulai watchPosition untuk update real-time
-              watchIdRef.current = navigator.geolocation.watchPosition(
-                  (position) => {
-                      const { latitude, longitude } = position.coords;
-                      api.post('/drivers/location', { lat: latitude, lng: longitude });
-                      setLocationError(null); // Hapus error jika berhasil
-                  },
-                  handleLocationError, // Gunakan handler error yang sudah dibuat
-                  { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } // Timeout untuk watch
+      const startWatching = (initialPosition) => {
+        toast.success('Sinyal lokasi ditemukan! Pelacakan diaktifkan.');
+        const { latitude, longitude } = initialPosition.coords;
+        api.post('/drivers/location', { lat: latitude, lng: longitude });
+        setLocationError(null);
+
+        // Langkah 2: Setelah lokasi awal didapat, mulai watchPosition untuk update real-time
+        watchIdRef.current = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                api.post('/drivers/location', { lat: latitude, lng: longitude });
+                setLocationError(null); // Hapus error jika berhasil
+            },
+            handleLocationError,
+            highAccuracyOptions // Gunakan opsi akurasi tinggi untuk pelacakan
+        );
+        setIsTracking(true);
+      };
+
+      navigator.geolocation.getCurrentPosition(
+          startWatching,
+          (err) => {
+            // Jika akurasi tinggi gagal (terutama karena timeout), coba lagi dengan akurasi rendah.
+            if (err.code === 3) { // TIMEOUT
+              toast.warn('Akurasi tinggi gagal, mencoba dengan akurasi standar...');
+              navigator.geolocation.getCurrentPosition(
+                startWatching,
+                handleLocationError, // Jika ini juga gagal, tampilkan error akhir.
+                lowAccuracyOptions
               );
+            } else {
+              // Untuk error lain (misal: permission denied), langsung tampilkan.
+              handleLocationError(err);
+            }
           },
-          handleLocationError, // Gunakan handler error yang sama untuk getCurrentPosition
-          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 } // Timeout 30 detik untuk lokasi awal
+          highAccuracyOptions
       );
 
     } else {
@@ -103,8 +127,8 @@ function DriverDashboard() {
         watchIdRef.current = null;
       }
       toast.info('Pelacakan lokasi dinonaktifkan.');
+      setIsTracking(false);
     }
-    setIsTracking(!isTracking);
   };
 
   return (

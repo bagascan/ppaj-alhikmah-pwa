@@ -144,7 +144,7 @@ router.post('/', auth, async (req, res) => {
           icon: '/logo192.png'
         });
 
-        const pushPromises = subscriptions.map(sub =>
+        const pushPromises = subscriptions.map(sub => 
           webpush.sendNotification(sub.subscription, payload)
             .catch(error => {
               if (error.statusCode === 410) {
@@ -152,11 +152,11 @@ router.post('/', auth, async (req, res) => {
                 return Subscription.findByIdAndDelete(sub._id);
               }
               console.error('Gagal mengirim notif tambah siswa:', error.statusCode);
+              // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
               return null;
             })
         );
         await Promise.allSettled(pushPromises);
-
       }
     } catch (notificationError) {
       console.error('Error saat mengirim notifikasi siswa baru:', notificationError);
@@ -219,6 +219,7 @@ router.put('/:id', auth, async (req, res) => {
                   return Subscription.findByIdAndDelete(sub._id);
                 }
                 console.error('Gagal mengirim notif update siswa:', error.statusCode);
+                // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
                 return null;
               })
           );
@@ -262,6 +263,7 @@ router.put('/:id', auth, async (req, res) => {
                   return Subscription.findByIdAndDelete(sub._id);
                 }
                 console.error('Gagal mengirim notif update jadwal:', error.statusCode);
+                // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
                 return null;
               })
           );

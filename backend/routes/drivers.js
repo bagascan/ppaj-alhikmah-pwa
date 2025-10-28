@@ -143,7 +143,7 @@ router.post('/handover', auth, async (req, res) => {
       icon: '/logo192.png'
     });
 
-    const pushPromises = subscriptions.map(sub =>
+    const pushPromises = subscriptions.map(sub => 
       webpush.sendNotification(sub.subscription, payload)
         .catch(error => {
           if (error.statusCode === 410) {
@@ -151,11 +151,11 @@ router.post('/handover', auth, async (req, res) => {
             return Subscription.findByIdAndDelete(sub._id);
           }
           console.error('Gagal mengirim notif handover:', error.statusCode);
+          // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
           return null;
         })
     );
     await Promise.allSettled(pushPromises);
-
     res.json({ msg: `${studentIds.length} siswa berhasil dipindahkan ke zona ${toDriver.zone}.` });
 
   } catch (err) {

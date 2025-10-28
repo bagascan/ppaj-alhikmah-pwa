@@ -95,7 +95,7 @@ router.post('/emergency', auth, async (req, res) => {
         icon: '/logo192.png'
       });
 
-      // Kirim notifikasi ke setiap langganan dengan aman
+      // Kirim notifikasi ke setiap langganan dengan aman menggunakan loop for...of
       for (const sub of subscriptions) {
         try {
           await webpush.sendNotification(sub.subscription, payload);

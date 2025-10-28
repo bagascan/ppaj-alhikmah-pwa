@@ -14,6 +14,7 @@ function DriverChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [parentName, setParentName] = useState(''); // State baru untuk nama wali murid
   const messagesEndRef = useRef(null);
 
   // Ambil parentId dari URL
@@ -44,6 +45,12 @@ function DriverChatPage() {
       try {
         // 3. Buat ID ruang obrolan yang konsisten
         if (!parentId) throw new Error("Wali murid tidak dipilih.");
+
+        // PERBAIKAN: Ambil data user wali murid untuk mendapatkan namanya
+        const parentUserRes = await api.get(`/auth/users/by-profile/${parentId}`);
+        if (!parentUserRes.data) throw new Error("Data wali murid tidak ditemukan.");
+        setParentName(parentUserRes.data.name);
+
         const chatRoomId = [driverUser.id, parentId].sort().join('-');
         setRoom(chatRoomId);
 
@@ -98,7 +105,7 @@ function DriverChatPage() {
 
   return (
     <>
-      <h2>Chat dengan {parentId}</h2>
+      <h2>Chat dengan {parentName || 'Wali Murid'}</h2>
       <Card>
         <Card.Body style={{ height: '60vh', overflowY: 'auto' }}>
           <div className="d-flex flex-column" ref={messagesEndRef}>

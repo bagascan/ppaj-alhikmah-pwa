@@ -11,8 +11,9 @@ const StudentSchema = new Schema({
     required: true
   },
   parent: {
-    type: String,
-    required: true
+    type: Schema.Types.ObjectId, // PERBAIKAN: Harus ObjectId
+    ref: 'parent', // Merujuk ke model 'parent'
+    required: true,
   },
   school: {
     type: Schema.Types.ObjectId, // Tipe data diubah menjadi ObjectId

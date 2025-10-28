@@ -200,16 +200,11 @@ router.post('/pusher', auth, (req, res) => {
   const channel = req.body.channel_name;
   let authResponse;
 
-  // PERBAIKAN DEFINITIF: Tambahkan pengecekan defensif.
-  // Jika karena alasan apapun middleware auth gagal melampirkan user, kirim error 403.
-  if (!req.user || !req.user.id) {
-    return res.status(403).send('Forbidden: User not authenticated for Pusher.');
-  }
-
   // Data pengguna yang akan dikirim ke Pusher.
   // user_id harus unik dan konsisten. Kita gunakan ObjectId dari user.
+  // PERBAIKAN KRITIS: Gunakan profileId agar konsisten dengan ID yang digunakan di frontend chat.
   const user_data = {
-    user_id: req.user.id, 
+    user_id: req.user.profileId, 
     user_info: { 
       name: req.user.name, 
       role: req.user.role, 
@@ -221,6 +216,22 @@ router.post('/pusher', auth, (req, res) => {
   // Dengan mengirimkan objek user_data lengkap, kita memastikan Pusher memiliki semua yang dibutuhkan.
   authResponse = req.pusher.authorizeChannel(socketId, channel, user_data);
   res.send(authResponse);
+});
+
+// @route   GET /api/auth/users/by-profile/:profileId
+// @desc    Get user data by their profileId
+// @access  Private
+router.get('/users/by-profile/:profileId', auth, async (req, res) => {
+  try {
+    const user = await User.findOne({ profileId: req.params.profileId }).select('-password');
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
 });
 
 module.exports = router;

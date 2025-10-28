@@ -10,6 +10,9 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 app.use(express.json()); // Middleware untuk parsing JSON body
+// PERBAIKAN: Tambahkan middleware untuk parsing application/x-www-form-urlencoded
+// Ini diperlukan agar endpoint otentikasi Pusher dapat membaca req.body
+app.use(express.urlencoded({ extended: true }));
 const Student = require('./models/Student'); // Impor model Student
 
 // Inisialisasi Pusher
@@ -134,5 +137,12 @@ app.get('/api/cron/reset-status', async (req, res) => {
     res.status(500).json({ message: 'Cron job failed.', error: error.message });
   }
 });
+
+// PERBAIKAN: Tambahkan blok ini untuk menjalankan server di lingkungan lokal.
+// Vercel akan mengabaikan blok ini dan hanya menggunakan `module.exports`.
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`[LOCAL DEV] Server backend berjalan di http://localhost:${PORT}`));
+}
 
 module.exports = app;

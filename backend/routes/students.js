@@ -4,6 +4,7 @@ const webpush = require('web-push');
 const Student = require('../models/Student');
 const User = require('../models/User'); // Impor model User
 const Driver = require('../models/Driver');
+const Parent = require('../models/Parent'); // Impor model Parent baru
 const TripLog = require('../models/TripLog');
 const Subscription = require('../models/Subscription');
 const bcrypt = require('bcryptjs');
@@ -15,7 +16,10 @@ const auth = require('../auth'); // 1. Impor middleware auth
 router.get('/', auth, async (req, res) => { // 2. Tambahkan 'auth' sebagai middleware
   try {
     // Populate the 'school' field to get school details (name) instead of just the ID
-    const students = await Student.find().sort({ createdAt: -1 }).populate('school', ['name', 'location']);
+    const students = await Student.find()
+      .sort({ createdAt: -1 })
+      .populate('school', ['name', 'location'])
+      .populate('parent', 'name'); // Ambil juga nama dari profil wali murid
     res.json(students);
   } catch (err) {
     console.error(err.message);
@@ -32,10 +36,15 @@ router.get('/for-parent-tracking', auth, async (req, res) => {
   }
 
   try {
-    const parentName = req.user.profileId;
+    // PERBAIKAN: Gunakan profileId (ObjectId) dari token untuk mencari siswa.
+    const parentProfileId = req.user.profileId;
 
-    // 1. Cari semua siswa milik wali murid ini dan populate data sekolahnya
-    const myStudents = await Student.find({ parent: parentName }).populate('school');
+    // 1. Cari profil Parent untuk mendapatkan namanya (jika diperlukan untuk logika lain)
+    const parentProfile = await Parent.findById(parentProfileId);
+    if (!parentProfile) return res.status(404).json({ msg: "Profil wali murid tidak ditemukan." });
+
+    // 2. Cari semua siswa yang field 'parent'-nya merujuk ke ObjectId profil ini
+    const myStudents = await Student.find({ parent: parentProfile._id }).populate('school');
     if (myStudents.length === 0) {
       return res.status(404).json({ msg: "Siswa tidak ditemukan." });
     }
@@ -62,8 +71,9 @@ router.get('/my-students', auth, async (req, res) => {
   }
 
   try {
-    const parentName = req.user.profileId;
-    const myStudents = await Student.find({ parent: parentName }).sort({ name: 1 });
+    // PERBAIKAN: Gunakan profileId (ObjectId) dari token untuk mencari siswa.
+    const parentProfileId = req.user.profileId;
+    const myStudents = await Student.find({ parent: parentProfileId }).sort({ name: 1 });
     res.json(myStudents);
   } catch (err) {
     console.error(err.message);
@@ -101,7 +111,7 @@ router.post('/', auth, async (req, res) => {
     const newStudent = new Student({
       name,
       address,
-      parent,
+      // parent akan diisi di bawah setelah profil Parent dibuat/ditemukan
       school, // This is now an ObjectId
       zone,
       generalStatus,
@@ -109,10 +119,22 @@ router.post('/', auth, async (req, res) => {
       service, // Menambahkan service
     });
 
-    const student = await newStudent.save();
-
     // Buat akun User untuk wali murid jika datanya ada
-    if (parentUserData) {
+    if (parentUserData && parent) {
+      // PERBAIKAN: Gunakan findOneAndUpdate dengan upsert untuk membuat profil Parent secara atomik.
+      // Ini akan membuat profil baru jika belum ada, atau mengembalikan yang sudah ada.
+      const parentProfile = await Parent.findOneAndUpdate(
+        { name: parent },
+        { $setOnInsert: { name: parent } },
+        { upsert: true, new: true }
+      );
+
+      // PERBAIKAN: Set field 'parent' di siswa dengan ObjectId dari profil Parent
+      newStudent.parent = parentProfile._id;
+
+      // Simpan siswa sekarang setelah semua data lengkap
+      const student = await newStudent.save();
+
       let parentUser = await User.findOne({ email: parentUserData.email });
       if (!parentUser) {
         parentUser = new User({
@@ -120,17 +142,20 @@ router.post('/', auth, async (req, res) => {
           email: parentUserData.email,
           password: parentUserData.password,
           role: 'parent',
-          profileId: parent, // profileId adalah nama wali murid
+          profileId: parentProfile._id, // PERBAIKAN: profileId sekarang adalah ObjectId dari profil Parent
         });
         const salt = await bcrypt.genSalt(10);
         parentUser.password = await bcrypt.hash(parentUser.password, salt);
         await parentUser.save();
       } else {
-        // Jika user sudah ada, pastikan profileId-nya sama dengan nama wali murid yang diinput
-        if (parentUser.profileId !== parent) {
-          return res.status(400).json({ msg: `Email ${parentUserData.email} sudah terdaftar untuk wali murid lain (${parentUser.profileId}). Gunakan email yang berbeda.` });
+        if (parentUser.role !== 'parent') {
+          return res.status(400).json({ msg: `Email ${parentUserData.email} sudah terdaftar untuk peran lain.` });
         }
       }
+      
+      // Kirim notifikasi ke supir di zona yang relevan
+      // ... (logika notifikasi yang sudah ada) ...
+      res.json(student);
     }
 
     // Kirim notifikasi ke supir di zona yang relevan
@@ -144,27 +169,16 @@ router.post('/', auth, async (req, res) => {
           icon: '/logo192.png'
         });
 
-        const pushPromises = subscriptions.map(sub => 
+        subscriptions.forEach(sub => {
           webpush.sendNotification(sub.subscription, payload)
-            .catch(error => {
-              if (error.statusCode === 410) {
-                console.log(`Subscription untuk siswa baru sudah tidak valid, akan dihapus.`);
-                return Subscription.findByIdAndDelete(sub._id);
-              }
-              console.error('Gagal mengirim notif tambah siswa:', error.statusCode);
-              // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
-              return null;
-            })
-        );
-        await Promise.allSettled(pushPromises);
+            .catch(err => console.error('Gagal mengirim notif tambah siswa:', err));
+        });
       }
     } catch (notificationError) {
       console.error('Error saat mengirim notifikasi siswa baru:', notificationError);
     }
-
-    res.json(student);
   } catch (err) {
-    console.error(err.message);
+    console.error("Error di POST /api/students:", err.message);
     res.status(500).send('Server Error');
   }
 });
@@ -211,19 +225,9 @@ router.put('/:id', auth, async (req, res) => {
             body: `Data untuk siswa ${updatedStudent.name} di zona Anda telah diperbarui.`,
             icon: '/logo192.png'
           });
-          const pushPromises = subscriptions.map(sub =>
-            webpush.sendNotification(sub.subscription, payload)
-              .catch(error => {
-                if (error.statusCode === 410) {
-                  console.log(`Subscription untuk update siswa sudah tidak valid, akan dihapus.`);
-                  return Subscription.findByIdAndDelete(sub._id);
-                }
-                console.error('Gagal mengirim notif update siswa:', error.statusCode);
-                // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
-                return null;
-              })
-          );
-          await Promise.allSettled(pushPromises);
+          subscriptions.forEach(sub => {
+            webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update siswa:', err));
+          });
         }
       } catch (notificationError) {
         console.error('Error saat mengirim notifikasi update siswa:', notificationError);
@@ -255,19 +259,9 @@ router.put('/:id', auth, async (req, res) => {
             icon: '/logo192.png'
           });
 
-          const pushPromises = subscriptions.map(sub =>
-            webpush.sendNotification(sub.subscription, payload)
-              .catch(error => {
-                if (error.statusCode === 410) {
-                  console.log(`Subscription untuk update jadwal sudah tidak valid, akan dihapus.`);
-                  return Subscription.findByIdAndDelete(sub._id);
-                }
-                console.error('Gagal mengirim notif update jadwal:', error.statusCode);
-                // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
-                return null;
-              })
-          );
-          await Promise.allSettled(pushPromises);
+          subscriptions.forEach(sub => {
+            webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update jadwal:', err));
+          });
         }
       } catch (notificationError) {
         console.error('Error saat mengirim notifikasi update jadwal:', notificationError);
@@ -296,7 +290,10 @@ router.put('/:id', auth, async (req, res) => {
       }
 
       // Kirim notifikasi real-time ke wali murid
-      const parentId = updatedStudent.parent;
+      // PERBAIKAN: Dapatkan profil Parent untuk mendapatkan namanya
+      const parentProfile = await Parent.findById(updatedStudent.parent);
+      const parentId = parentProfile ? parentProfile.name : null;
+
       if (parentId) {
         // Buat pesan yang lebih deskriptif
         let statusMessage = `Status ananda ${updatedStudent.name} telah diperbarui.`;
@@ -323,13 +320,8 @@ router.put('/:id', auth, async (req, res) => {
 
         // Kirim Web Push Notification
         try {
-          // PERBAIKAN KRITIS: Jangan gunakan nama wali murid (parentId) untuk mencari subscription.
-          // Cari akun User wali murid berdasarkan profileId (nama) untuk mendapatkan ObjectId-nya.
-          const parentUser = await User.findOne({ profileId: parentId });
-          if (!parentUser) {
-            throw new Error(`Akun User untuk wali murid ${parentId} tidak ditemukan.`);
-          }
-          const subscriptions = await Subscription.find({ userId: parentUser._id });
+          // PERBAIKAN: Cari user berdasarkan profileId (ObjectId) dari siswa yang diupdate
+          const subscriptions = await Subscription.find({ userId: updatedStudent.parent });
           const payload = JSON.stringify({ title: 'Update Status Antar-Jemput', body: notificationData.message, icon: '/logo192.png' });
 
           // PERBAIKAN DEFINITIF: Gunakan Promise.allSettled untuk mengirim notifikasi secara aman.

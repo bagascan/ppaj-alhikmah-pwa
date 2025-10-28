@@ -22,8 +22,9 @@ const UserSchema = new Schema({
   },
   // ID yang merujuk ke profil spesifik (misal: ID dari collection Driver, atau nama wali murid)
   profileId: {
-    type: String, // Menggunakan String agar fleksibel untuk ObjectId atau nama wali murid
+    type: Schema.Types.ObjectId, // PERBAIKAN: Harus selalu ObjectId
     required: true,
+    refPath: 'role' // Merujuk ke model 'driver' atau 'parent' berdasarkan nilai field 'role'
   }
 });
 

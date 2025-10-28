@@ -208,16 +208,19 @@ function DriverNav() {
   }, [students, loggedInDriver, tripType]);
 
   const initialPosition = useMemo(() => {
-    // initialPosition SEKARANG HANYA untuk titik awal rute, bukan posisi real-time.
-    // Ini membuatnya stabil dan tidak berubah-ubah.
+    // PERBAIKAN: initialPosition sekarang HANYA untuk posisi awal peta dan marker.
+    // Ini tidak lagi digunakan untuk menghitung rute secara langsung.
     // Prioritaskan lokasi real-time dari GPS jika ada
     if (realtimeLocation) {
       return [realtimeLocation.lat, realtimeLocation.lng];
     }
     const garageCoords = loggedInDriver?.location?.coordinates;
+    if (garageCoords && (garageCoords[0] !== 0 || garageCoords[1] !== 0)) {
+      return [garageCoords[1], garageCoords[0]];
+    }
     // Jika tidak ada sama sekali, gunakan lokasi default
     return [-7.2575, 112.7521]; // Fallback ke lokasi default (Surabaya)
-  }, [loggedInDriver, realtimeLocation]);
+  }, [loggedInDriver, realtimeLocation]); // Tetap di sini untuk update posisi marker
 
   // Dapatkan semua sekolah tujuan yang unik dari daftar jemputan
   const targetSchools = useMemo(() => {
@@ -229,8 +232,12 @@ function DriverNav() {
 
   const waypoints = useMemo(() => {
     console.log('[DEBUG] Menghitung ulang waypoints...');
-    const startPoint = initialPosition;
-    if (!startPoint) return [];
+    // PERBAIKAN: Titik awal rute (startPoint) sekarang diambil dari lokasi real-time jika ada,
+    // jika tidak, gunakan lokasi garasi. Ini membuat perhitungan waypoints lebih akurat.
+    const startPoint = realtimeLocation 
+      ? [realtimeLocation.lat, realtimeLocation.lng]
+      : (loggedInDriver?.location?.coordinates ? [loggedInDriver.location.coordinates[1], loggedInDriver.location.coordinates[0]] : null);
+    if (!startPoint) return { points: [], studentPoints: [], schoolPoints: [] };
     
     // Filter siswa berdasarkan status yang relevan dengan jenis trip
     const relevantStudents = (tripType === 'pickup')
@@ -264,7 +271,7 @@ function DriverNav() {
       studentPoints: relevantStudents, // Kirim data siswa lengkap untuk marker
       schoolPoints: targetSchools
     };
-  }, [initialPosition, studentList, targetSchools, tripType]);
+  }, [realtimeLocation, loggedInDriver, studentList, targetSchools, tripType]); // PERBAIKAN: Dependensi yang benar
 
   // PERBAIKAN: Buat kunci string dari waypoints. Ini akan stabil dan tidak berubah
   // jika isi array-nya sama, mencegah loop tak terbatas.
@@ -272,7 +279,7 @@ function DriverNav() {
 
   const fetchRoute = useCallback(async () => {
     console.log('[DEBUG] 3. Memulai fetchRoute...');
-    if (!initialPosition || waypoints.points.length < 2) {
+    if (waypoints.points.length < 2) {
       console.log('[DEBUG] Tidak cukup titik, membatalkan fetch rute.');
       setRoadPath([]); // Kosongkan rute jika tidak cukup titik
       return;
@@ -305,7 +312,7 @@ function DriverNav() {
     } finally {
       isFetching.current = false;
     }
-  }, [waypointsKey, initialPosition, waypoints]); // Dependensi untuk useCallback
+  }, [waypointsKey, waypoints]); // PERBAIKAN: Hapus dependensi yang tidak perlu
 
   // Efek untuk mengambil rute HANYA saat waypointsKey berubah (misal: ganti trip, siswa dijemput)
   useEffect(() => {

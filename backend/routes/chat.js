@@ -69,9 +69,15 @@ router.put('/read/:room', async (req, res) => {
 // @access  Public (for now)
 router.get('/unread/count/:userId', async (req, res) => {
   try {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ msg: 'User ID is required.' });
+    }
+
     const unreadCount = await Chat.countDocuments({
-      room: { $regex: req.params.userId }, // Find rooms the user is part of
-      'sender.id': { $ne: req.params.userId }, // Messages not sent by the user
+      // PERBAIKAN: Query yang lebih aman dan efisien.
+      room: { $regex: new RegExp(userId) }, // Cari room yang mengandung userId
+      'sender.id': { $ne: userId }, // Pesan yang tidak dikirim oleh user ini
       isRead: false, // That are unread
     });
     res.json({ count: unreadCount });

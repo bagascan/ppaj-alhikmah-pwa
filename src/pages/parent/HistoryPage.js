@@ -8,18 +8,17 @@ function ParentHistoryPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
   const { auth, loading: authLoading } = useAuth();
-  const parentName = auth?.user?.profileId;
 
   useEffect(() => {
     const fetchData = async () => {
       if (authLoading) return;
-      if (!parentName) {
+      if (!auth) {
         setDataLoading(false);
         setError("Sesi tidak valid.");
         return;
       }
       try {
-        const historyRes = await api.get(`/trips/history/parent/${parentName}`);
+        const historyRes = await api.get(`/trips/history/parent`);
         setTripHistory(historyRes.data);
       } catch (err) {
         setError("Gagal memuat riwayat perjalanan.");
@@ -29,7 +28,7 @@ function ParentHistoryPage() {
       }
     };
     fetchData();
-  }, [parentName, authLoading]);
+  }, [auth, authLoading]);
 
   if (authLoading || dataLoading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat riwayat...</p></div>;

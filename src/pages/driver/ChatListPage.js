@@ -28,11 +28,20 @@ function ChatListPage() {
         const studentsRes = await api.get('/students');
 
         // 3. Filter siswa yang ada di zona supir
+        console.log('Semua Siswa:', studentsRes.data);
+        console.log('Zona Supir:', myDriver.zone);
         const studentsInZone = studentsRes.data.filter(s => s.zone === myDriver.zone);
+        console.log('Siswa di Zona:', studentsInZone);
 
         // 4. Buat daftar wali murid yang unik dari siswa-siswa tersebut
-        const uniqueParents = [...new Map(studentsInZone.map(item => [item.parent, item])).values()];
-        setParentList(uniqueParents.map(s => ({ parentId: s.parent, studentName: s.name })));
+        // PERBAIKAN: Gunakan `item.parent._id` sebagai kunci dan simpan seluruh objek parent
+        // yang sudah di-populate dari backend.
+        const uniqueParents = [...new Map(studentsInZone.map(item => 
+          item.parent ? [item.parent._id, item.parent] : null
+        ).filter(Boolean)).values()];
+        console.log('Daftar Wali Murid Unik:', uniqueParents);
+
+        setParentList(uniqueParents);
 
       } catch (err) {
         setError(err.message);
@@ -52,11 +61,11 @@ function ChatListPage() {
     <>
       <h2 className="mt-3">Pilih Wali Murid</h2>
       {parentList.length > 0 ? (
-        parentList.map(({ parentId, studentName }) => (
-          <Card as={Link} to={`/driver/chat/${parentId}`} key={parentId} className="mb-3 text-decoration-none text-dark shadow-sm">
+        parentList.map((parent) => ( // 'parent' di sini adalah objek { _id: '...', name: '...' }
+          <Card as={Link} to={`/driver/chat/${parent._id}`} key={parent._id} className="mb-3 text-decoration-none text-dark shadow-sm">
             <Card.Body>
-              <Card.Title className="mb-1">{parentId}</Card.Title>
-              <Card.Text className="text-muted small">Wali dari ananda {studentName}</Card.Text>
+              <Card.Title className="mb-1">{parent.name}</Card.Title> 
+              <Card.Text className="text-muted small">Wali Murid</Card.Text>
             </Card.Body>
           </Card>
         ))

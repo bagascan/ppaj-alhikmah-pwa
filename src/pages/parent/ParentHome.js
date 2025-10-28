@@ -39,8 +39,9 @@ function ParentHome() {
   useEffect(() => {
     if (!auth || auth.user.role !== 'parent') return;
 
-    const parentId = auth.user.profileId;
-    const channel = pusher.subscribe(`private-parent-${parentId}`);
+    // PERBAIKAN: Gunakan user.id (ObjectId) untuk nama channel agar unik dan aman.
+    const userId = auth.user.id;
+    const channel = pusher.subscribe(`private-user-${userId}`);
 
     channel.bind('student-status-update', (data) => {
       toast.info(data.message); // Tampilkan notifikasi toast
@@ -53,7 +54,7 @@ function ParentHome() {
     });
 
     return () => {
-      pusher.unsubscribe(`private-parent-${parentId}`);
+      pusher.unsubscribe(`private-user-${userId}`);
     };
   }, [auth]);
 

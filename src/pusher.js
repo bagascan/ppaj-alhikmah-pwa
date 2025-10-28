@@ -12,7 +12,7 @@ const pusherInstance = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
 });
 
 /**
- * Objek helper untuk asdasdPusher yang memungkinkan pembaruan token otentikasi secara dinamis.
+ * Objek helper untuk Pusher yang memungkinkan pembaruan token otentikasi secara dinamis.
  * Ini penting untuk memastikan otentikasi private channel berfungsi setelah pengguna login.
  */
 const pusher = {

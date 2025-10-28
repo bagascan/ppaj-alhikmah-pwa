@@ -200,18 +200,20 @@ router.post('/pusher', auth, (req, res) => {
   const channel = req.body.channel_name;
   let authResponse;
 
-  // Data pengguna yang dibutuhkan Pusher untuk otentikasi.
-  // 'user_id' harus unik untuk setiap pengguna.
-  const userData = {
-    user_id: req.user.id, // Gunakan user.id dari token JWT
-    user_info: { name: req.user.name, role: req.user.role, profileId: req.user.profileId }
+  // Data pengguna yang akan dikirim ke Pusher.
+  // user_id harus unik dan konsisten. Kita gunakan ObjectId dari user.
+  const user_data = {
+    user_id: req.user.id, 
+    user_info: { 
+      name: req.user.name, 
+      role: req.user.role, 
+      profileId: req.user.profileId 
+    }
   };
 
-  if (channel.startsWith('presence-')) {
-    authResponse = req.pusher.authorizeChannel(socketId, channel, userData);
-  } else {
-    authResponse = req.pusher.authorizeChannel(socketId, channel, { user_id: req.user.id });
-  }
+  // Untuk channel private dan presence, Pusher memerlukan data pengguna.
+  // Dengan mengirimkan objek user_data lengkap, kita memastikan Pusher memiliki semua yang dibutuhkan.
+  authResponse = req.pusher.authorizeChannel(socketId, channel, user_data);
   res.send(authResponse);
 });
 

@@ -177,7 +177,7 @@ function DriverNav() {
       }
     };
     fetchInitialData();
-  }, [auth, authLoading]);
+  }, [auth, authLoading, tripType]); // PERBAIKAN: Tambahkan tripType sebagai dependensi
 
   // Efek untuk mendengarkan update lokasi real-time dari supir itu sendiri
   useEffect(() => {

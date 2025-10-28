@@ -297,11 +297,20 @@ router.put('/:id', auth, async (req, res) => {
           const subscriptions = await Subscription.find({ userId: parentId });
           const payload = JSON.stringify({ title: 'Update Status Antar-Jemput', body: notificationData.message, icon: '/logo192.png' });
 
-          subscriptions.forEach(sub => {
-            webpush.sendNotification(sub.subscription, payload).catch(error => {
-              console.error('Gagal mengirim push notification:', error.statusCode, error.body);
-            });
-          });
+          // PERBAIKAN: Gunakan Promise.allSettled untuk mengirim notifikasi secara aman.
+          // Ini akan mencegah server crash jika salah satu subscription tidak valid.
+          const pushPromises = subscriptions.map(sub => 
+            webpush.sendNotification(sub.subscription, payload)
+              .catch(error => {
+                // Jika subscription tidak valid (misal: error 410 Gone), kita bisa menghapusnya dari database.
+                if (error.statusCode === 410) {
+                  console.log(`Subscription ${sub._id} sudah tidak valid, akan dihapus.`);
+                  return Subscription.findByIdAndDelete(sub._id);
+                }
+                console.error('Gagal mengirim push notification:', error.statusCode, error.body);
+              })
+          );
+          await Promise.allSettled(pushPromises);
         } catch (pushError) {
           console.error('Error saat mencari langganan untuk push notif:', pushError);
         }

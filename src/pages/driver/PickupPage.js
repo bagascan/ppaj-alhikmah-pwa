@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
 import { toast } from 'react-toastify';
 import { Container, Card, Spinner, Alert, Badge, Button, ButtonGroup, Row, Col } from 'react-bootstrap';
@@ -11,7 +11,7 @@ function PickupPage() {
   const [error, setError] = useState(null);
   const { auth, loading: authLoading } = useAuth();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
       try {
         setDataLoading(true);
         if (authLoading) return;
@@ -49,11 +49,11 @@ function PickupPage() {
       } finally {
         setDataLoading(false);
       }
-    };
+    }, [auth, authLoading]);
 
   useEffect(() => {
     fetchData();
-  }, [auth, authLoading]);
+  }, [fetchData]);
 
   const handleUpdateStatus = async (studentId, newStatus) => {
     // Optimistic UI update for a responsive feel

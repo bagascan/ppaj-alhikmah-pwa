@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api'; // Gunakan instance api yang sudah memiliki interceptor
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Card, Spinner, Alert } from 'react-bootstrap';
-import L, { channel } from 'leaflet';
+import L from 'leaflet';
 import pusher from '../../pusher';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../hooks/useAuth';

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, InputGroup, Spinner, Alert } from 'react-bootstrap';
 import { useParams } from 'react-router-dom';
 import { BsSend } from 'react-icons/bs';
-import { socket } from '../../socket';
+import pusher from '../../pusher';
 import api from '../../api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../hooks/useAuth';
 
 function ChatPage() {
   const [messages, setMessages] = useState([]);
@@ -13,7 +14,7 @@ function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef(null); // Tetap gunakan ini untuk auto-scroll
 
   // Ambil driverId dari URL
   const { driverId } = useParams();
@@ -23,36 +24,44 @@ function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const { auth, loading: authLoading } = useAuth();
+
   useEffect(() => {
     // Fungsi untuk menentukan ruang obrolan dan memuat data awal
     const initializeChat = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (authLoading) {
+        return;
+      }
+      if (!auth || auth.user.role !== 'parent') {
         setLoading(false);
         setError("Sesi tidak valid. Silakan login kembali.");
         return;
       }
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      setCurrentUser({ id: user.profileId, role: user.role });
+      setCurrentUser({ id: auth.user.profileId, role: auth.user.role });
 
       try {
         // 3. Buat ID ruang obrolan yang konsisten
         if (!driverId) throw new Error("Supir tidak dipilih.");
-        const chatRoomId = [driverId, user.profileId].sort().join('-');
+        const chatRoomId = [driverId, auth.user.profileId].sort().join('-');
         setRoom(chatRoomId);
-
-        // 4. Bergabung ke ruang obrolan di server
-        socket.emit('joinRoom', chatRoomId);
 
         // 5. Ambil riwayat chat
         const historyRes = await api.get(`/chat/${chatRoomId}`);
         setMessages(historyRes.data);
 
         // 6. Tandai pesan sebagai sudah dibaca
-        await api.put(`/chat/read/${chatRoomId}`, { readerId: user.profileId });
+        await api.put(`/chat/read/${chatRoomId}`, { readerId: auth.user.profileId });
         // Beri tahu komponen lain (seperti BottomNav) bahwa pesan telah dibaca
         window.dispatchEvent(new Event('messagesRead'));
 
+        // Subscribe ke channel Pusher
+        const channel = pusher.subscribe(`private-chat-${chatRoomId}`);
+        channel.bind('new-message', (message) => {
+          setMessages(prevMessages => [...prevMessages, message]);
+        });
+
+        // Cleanup
+        return () => pusher.unsubscribe(`private-chat-${chatRoomId}`);
       } catch (err) {
         setError(err.message);
         toast.error("Gagal memulai sesi chat.");
@@ -62,37 +71,21 @@ function ChatPage() {
     };
 
     initializeChat();
-
-    // Listener untuk pesan baru yang masuk
-    const handleReceiveMessage = (message) => {
-      setMessages(prevMessages => [...prevMessages, message]);
-    };
-    socket.on('receiveMessage', handleReceiveMessage);
-
-    // Cleanup listener saat komponen di-unmount
-    return () => {
-      socket.off('receiveMessage', handleReceiveMessage);
-    };
-  }, [driverId]);
+  }, [driverId, auth, authLoading]);
 
   // Auto-scroll setiap kali ada pesan baru
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (newMessage.trim() && room && currentUser) {
-      const messageData = {
-        room: room,
-        sender: currentUser,
-        message: newMessage,
-      };
-      socket.emit('sendMessage', messageData, (response) => {
-        if (response.status !== 'ok') {
-          toast.error("Gagal mengirim pesan.");
-        }
-      });
+      try {
+        await api.post('/chat', { room, sender: currentUser, message: newMessage });
+      } catch (error) {
+        toast.error("Gagal mengirim pesan.");
+      }
       setNewMessage('');
     }
   };

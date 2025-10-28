@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Card, Spinner, Alert, Button } from 'react-bootstrap';
 import L from 'leaflet';
 import pusher from '../../pusher';
+import { useAuth } from '../../hooks/useAuth';
 
 // Ikon untuk shuttle
 const vehicleIcon = L.divIcon({
@@ -15,7 +16,7 @@ const vehicleIcon = L.divIcon({
 });
 
 // Komponen Marker Supir yang bisa diupdate secara mandiri
-function DriverMarker({ driver, map, isAutoCentering, isFirstDriver }) {
+function DriverMarker({ driver, map, isAutoCentering, isFirstDriver, realtimeLocation }) {
   const markerRef = useRef(null);
 
   // Inisialisasi marker saat pertama kali render
@@ -27,25 +28,17 @@ function DriverMarker({ driver, map, isAutoCentering, isFirstDriver }) {
     }
   }, [driver, map, driver.name, driver.vehicle]);
 
-  // Update posisi marker via socket
+  // Efek ini sekarang hanya untuk mengupdate posisi marker, bukan untuk subscribe
   useEffect(() => {
-    // Subscribe ke channel publik untuk update lokasi
-    const channel = pusher.subscribe('tracking-channel');
-
-    // Bind ke event 'location-update'
-    channel.bind('location-update', (data) => {
-        if (data.driverId === driver._id && markerRef.current) {
-            const newPos = [data.location.lat, data.location.lng];
-            markerRef.current.setLatLng(newPos);
-            if (isAutoCentering && isFirstDriver) {
-                map.panTo(newPos);
-            }
-            markerRef.current.setTooltipContent(`Supir: <strong>${driver.name || 'N/A'}</strong><br />Kendaraan: ${driver.vehicle || 'N/A'}`);
-        }
-    });
-
-    return () => pusher.unsubscribe('tracking-channel');
-  }, [driver._id, driver.name, driver.vehicle, map, isAutoCentering, isFirstDriver]);
+    if (realtimeLocation && markerRef.current) {
+      const newPos = [realtimeLocation.lat, realtimeLocation.lng];
+      markerRef.current.setLatLng(newPos);
+      if (isAutoCentering && isFirstDriver) {
+        map.panTo(newPos);
+      }
+      markerRef.current.setTooltipContent(`Supir: <strong>${driver.name || 'N/A'}</strong><br />Kendaraan: ${driver.vehicle || 'N/A'}`);
+    }
+  }, [realtimeLocation, driver.name, driver.vehicle, map, isAutoCentering, isFirstDriver]);
 
   return null; // Komponen ini tidak merender elemen DOM secara langsung
 }
@@ -66,28 +59,21 @@ function TrackPage() {
   const [loading, setLoading] = useState(true);
   const [drivers, setDrivers] = useState([]); // State untuk banyak supir
   const [error, setError] = useState(null);
+  const [driverLocations, setDriverLocations] = useState({}); // State terpusat untuk lokasi
   const [isAutoCentering, setIsAutoCentering] = useState(true);
-
-  const [parentName, setParentName] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      if (user.role === 'parent') setParentName(user.profileId);
-    }
-  }, []);
+  const { auth, loading: authLoading } = useAuth();
 
   // Komponen baru untuk me-render marker.
   // Dibuat di dalam TrackPage agar bisa mengakses state 'drivers'.
   function DriverMarkers() {
-    const map = useMap(); // Hook ini aman dipanggil di sini karena DriverMarkers akan dirender di dalam MapContainer
+    const map = useMap();
     return (
       <>
         {drivers.map((driver, index) => (
           <DriverMarker 
             key={driver._id} 
             driver={driver} 
+            realtimeLocation={driverLocations[driver._id]} // Kirim lokasi real-time sebagai prop
             map={map} 
             isAutoCentering={isAutoCentering}
             isFirstDriver={index === 0} // Tandai supir pertama untuk auto-center
@@ -97,12 +83,33 @@ function TrackPage() {
     );
   }
 
+  // Effect untuk subscribe ke Pusher (HANYA SEKALI)
+  useEffect(() => {
+    const channel = pusher.subscribe('tracking-channel');
+
+    channel.bind('location-update', (data) => {
+      setDriverLocations(prevLocations => ({
+        ...prevLocations,
+        [data.driverId]: data.location
+      }));
+    });
+
+    // Cleanup saat komponen di-unmount
+    return () => {
+      pusher.unsubscribe('tracking-channel');
+    };
+  }, []); // Dependency array kosong agar hanya berjalan sekali
+
   // Effect 1: Fetch initial data to find the relevant driver
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!parentName) {
+      if (authLoading) {
+        return;
+      }
+      if (!auth || auth.user.role !== 'parent') {
         setLoading(false);
-        return; // Jangan fetch data jika parentName belum ada
+        setError("Sesi tidak valid atau Anda bukan wali murid.");
+        return;
       }
       try {
         // Panggil endpoint baru yang lebih efisien dan aman
@@ -140,9 +147,9 @@ function TrackPage() {
     };
 
     fetchInitialData();
-  }, [parentName]); // Jalankan ulang jika parentName berubah
+  }, [auth, authLoading]); // Jalankan ulang jika auth berubah
 
-  if (loading) {
+  if (loading || authLoading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat lokasi...</p></div>;
   }
 

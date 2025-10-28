@@ -4,21 +4,23 @@ import { Link } from 'react-router-dom';
 import api from '../../api';
 import { toast } from 'react-toastify';
 import { BsPerson, BsGeoAlt, BsCheckCircle, BsXCircle, BsQuestionCircle, BsArrowRightCircle } from 'react-icons/bs';
+import { useAuth } from '../../hooks/useAuth';
+import pusher from '../../pusher';
 
 function ParentHome() {
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userName, setUserName] = useState('');
+  const { auth, loading: authLoading } = useAuth();
+  const userName = auth?.user?.name || '';
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      setUserName(user.name || '');
-    }
-
     const fetchStudents = async () => {
+      if (authLoading || !auth) {
+        if (!authLoading) setDataLoading(false);
+        return;
+      }
+
       try {
         const res = await api.get('/students/my-students');
         setStudents(res.data || []);
@@ -26,12 +28,34 @@ function ParentHome() {
         setError("Gagal memuat data siswa. Silakan coba lagi nanti.");
         toast.error("Gagal memuat data siswa.");
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
 
     fetchStudents();
-  }, []);
+  }, [auth, authLoading]);
+
+  // Efek untuk mendengarkan update status siswa secara real-time
+  useEffect(() => {
+    if (!auth || auth.user.role !== 'parent') return;
+
+    const parentId = auth.user.profileId;
+    const channel = pusher.subscribe(`private-parent-${parentId}`);
+
+    channel.bind('student-status-update', (data) => {
+      toast.info(data.message); // Tampilkan notifikasi toast
+      // Perbarui state siswa secara lokal
+      setStudents(prevStudents =>
+        prevStudents.map(student =>
+          student.name === data.studentName ? { ...student, tripStatus: data.status } : student
+        )
+      );
+    });
+
+    return () => {
+      pusher.unsubscribe(`private-parent-${parentId}`);
+    };
+  }, [auth]);
 
   const getStatusInfo = (status) => {
     switch (status) {
@@ -50,7 +74,7 @@ function ParentHome() {
     }
   };
 
-  if (loading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat data...</p></div>;
+  if (authLoading || dataLoading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat data...</p></div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
   return (

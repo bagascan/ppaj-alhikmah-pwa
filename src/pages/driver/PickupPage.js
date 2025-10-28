@@ -2,24 +2,28 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { toast } from 'react-toastify';
 import { Container, Card, Spinner, Alert, Badge, Button, ButtonGroup, Row, Col } from 'react-bootstrap';
+import { useAuth } from '../../hooks/useAuth';
 
 function PickupPage() {
   const [driver, setDriver] = useState(null);
   const [studentsInZone, setStudentsInZone] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { auth, loading: authLoading } = useAuth();
 
   const fetchData = async () => {
       try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error("Sesi tidak valid.");
-        const user = JSON.parse(atob(token.split('.')[1])).user;
-        if (user.role !== 'driver') throw new Error("Akses ditolak.");
+        setDataLoading(true);
+        if (authLoading) return;
+        if (!auth || auth.user.role !== 'driver') {
+          setError("Akses ditolak.");
+          setDataLoading(false);
+          return;
+        }
 
         // Ambil data supir yang login dan semua siswa
         const [driverRes, studentsRes] = await Promise.all([
-          api.get(`/drivers/${user.profileId}`), // Endpoint baru untuk mengambil 1 supir
+          api.get(`/drivers/${auth.user.profileId}`), // Endpoint baru untuk mengambil 1 supir
           api.get('/students')
         ]);
         const currentDriver = driverRes.data;
@@ -43,13 +47,13 @@ function PickupPage() {
         toast.error("Gagal memuat data penjemputan.");
         console.error(err);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [auth, authLoading]);
 
   const handleUpdateStatus = async (studentId, newStatus) => {
     // Optimistic UI update for a responsive feel
@@ -79,7 +83,7 @@ function PickupPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat daftar siswa...</p></div>;
   }
 

@@ -4,8 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import { Card, Row, Col, ListGroup, Button, Spinner, Alert, Nav, Modal, Form } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import L from 'leaflet';
-import { socket } from '../../socket';
 import { BsPerson, BsFlagFill, BsCheckCircleFill } from 'react-icons/bs';
+import pusher from '../../pusher';
 
 // Ikon kustom untuk titik jemput
 const pickupIcon = new L.Icon({
@@ -103,19 +103,6 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
       driverMarkerRef.current = L.marker(initialPosition, { icon: vehicleIconWithRotation }).addTo(map);
       driverMarkerRef.current.bindPopup("Posisi Anda");
     }
-
-    const handleLocationUpdate = (data) => {
-      if (driverMarkerRef.current) {
-        const newPos = [data.location.lat, data.location.lng];
-        driverMarkerRef.current.setLatLng(newPos);
-        if (isAutoCentering) {
-          map.panTo(newPos);
-        }
-      }
-    };
-
-    socket.on('locationUpdated', handleLocationUpdate);
-    return () => socket.off('locationUpdated', handleLocationUpdate);
   }, [initialPosition, map, vehicleIconWithRotation, isAutoCentering]);
   return (
     <>
@@ -194,17 +181,18 @@ function DriverNav() {
   const fetchedRoutes = useRef(new Map()); // Cache untuk rute yang sudah di-fetch
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
+  const { auth, loading: authLoading } = useAuth();
   useEffect(() => {
     const fetchInitialData = async () => {
       console.log('[DEBUG] 1. Memulai fetchInitialData...');
       try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error("Sesi tidak valid.");
-        const user = JSON.parse(atob(token.split('.')[1])).user;
-        if (user.role !== 'driver' || !user.profileId) throw new Error("Akses ditolak.");
+        if (authLoading) return;
+        if (!auth || auth.user.role !== 'driver') {
+          throw new Error("Akses ditolak atau sesi tidak valid.");
+        }
 
         const [driverRes, studentsRes, schoolsRes] = await Promise.all([
-          api.get(`/drivers/${user.profileId}`),
+          api.get(`/drivers/${auth.user.profileId}`),
           api.get('/students'),
           api.get('/schools')
         ]);
@@ -223,23 +211,24 @@ function DriverNav() {
       }
     };
     fetchInitialData();
-  }, []);
+  }, [auth, authLoading]);
 
-  // Pisahkan listener socket ke dalam useEffect-nya sendiri
-  // Ini tidak akan memicu perhitungan rute ulang
+  // Efek untuk mendengarkan update lokasi real-time dari supir itu sendiri
   useEffect(() => {
-    const handleLocationUpdate = (data) => {
-      // Hanya update jika lokasi dari supir yang sedang "login"
-      console.log('[DEBUG] Menerima locationUpdated dari socket. Driver ID:', data.driverId);
-      if (loggedInDriver && data.driverId === loggedInDriver._id) {
-        setRealtimeLocation(data.location);
+    if (!loggedInDriver?._id) return;
+
+    const channel = pusher.subscribe('tracking-channel');
+    channel.bind('location-update', (data) => {
+      // Hanya update jika data berasal dari supir yang sedang login
+      if (data.driverId === loggedInDriver._id) {
+        setRealtimeLocation(data.location); // Update posisi real-time
       }
-    };
-    socket.on('locationUpdated', handleLocationUpdate);
+    });
+
     return () => {
-      socket.off('locationUpdated', handleLocationUpdate);
+      pusher.unsubscribe('tracking-channel');
     };
-  }, [loggedInDriver]); // Hanya bergantung pada loggedInDriver
+  }, [loggedInDriver]); // Jalankan ulang jika data supir berubah
 
   // Menggunakan logika filter yang sudah diperbarui sesuai model data Student.js dan diurutkan
   const studentList = useMemo(() => {

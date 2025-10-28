@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api'; // Gunakan instance api kustom
 import { ListGroup, Spinner, Alert, Card } from 'react-bootstrap';
+import { useAuth } from '../../hooks/useAuth';
 
 function ParentHistoryPage() {
   const [tripHistory, setTripHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [parentName, setParentName] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      if (user.role === 'parent') setParentName(user.profileId);
-    }
-  }, []);
+  const { auth, loading: authLoading } = useAuth();
+  const parentName = auth?.user?.profileId;
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!parentName) return; // Jangan fetch jika parentName belum ada
+      if (authLoading) return;
+      if (!parentName) {
+        setDataLoading(false);
+        setError("Sesi tidak valid.");
+        return;
+      }
       try {
         const historyRes = await api.get(`/trips/history/parent/${parentName}`);
         setTripHistory(historyRes.data);
@@ -26,13 +25,13 @@ function ParentHistoryPage() {
         setError("Gagal memuat riwayat perjalanan.");
         console.error(err);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     fetchData();
-  }, [parentName]);
+  }, [parentName, authLoading]);
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat riwayat...</p></div>;
   }
 

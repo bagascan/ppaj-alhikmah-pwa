@@ -5,6 +5,7 @@ import { BsSend } from 'react-icons/bs';
 import pusher from '../../pusher';
 import api from '../../api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../hooks/useAuth';
 
 function DriverChatPage() {
   const [messages, setMessages] = useState([]);
@@ -23,19 +24,21 @@ function DriverChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const { auth, loading: authLoading } = useAuth();
+
   useEffect(() => {
     // Fungsi untuk menentukan ruang obrolan dan memuat data awal
     const initializeChat = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (authLoading) {
+        return;
+      }
+      if (!auth || auth.user.role !== 'driver') {
         setLoading(false);
         setError("Sesi tidak valid. Silakan login kembali.");
         return;
       }
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      if (user.role !== 'driver' || !user.profileId) throw new Error("Akses ditolak.");
 
-      const driverUser = { id: user.profileId, role: 'driver' };
+      const driverUser = { id: auth.user.profileId, role: 'driver' };
       setCurrentUser(driverUser);
 
       try {
@@ -70,7 +73,7 @@ function DriverChatPage() {
     };
 
     initializeChat();
-  }, [parentId]); // Jalankan ulang jika parentId berubah
+  }, [parentId, auth, authLoading]); // Jalankan ulang jika parentId berubah
 
   // Auto-scroll setiap kali ada pesan baru
   useEffect(() => {
@@ -90,7 +93,7 @@ function DriverChatPage() {
     }
   };
 
-  if (loading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Mempersiapkan chat...</p></div>;
+  if (loading || authLoading) return <div className="text-center mt-5"><Spinner animation="border" /> <p>Mempersiapkan chat...</p></div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
   return (

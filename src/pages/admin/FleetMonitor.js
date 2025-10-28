@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api'; // Gunakan instance api yang sudah memiliki interceptor
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Card, Spinner, Alert } from 'react-bootstrap';
-import L from 'leaflet';
-import { socket } from '../../socket';
+import L, { channel } from 'leaflet';
+import pusher from '../../pusher';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../hooks/useAuth';
 
 // Ikon default untuk supir
 const vehicleIcon = L.divIcon({
@@ -22,18 +23,21 @@ function FleetMonitor() {
   const [drivers, setDrivers] = useState([]);
   const [driverLocations, setDriverLocations] = useState({});
   const [zones, setZones] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
   const mapRef = useRef(null);
   const hasCenteredMapRef = useRef(false);
+  const { auth, loading: authLoading } = useAuth();
 
   // Ambil data zona dan supir dari API
   useEffect(() => {
     const fetchInitialData = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
+      if (authLoading) {
         return; // "Penjaga" untuk mencegah fetch sebelum login
+      }
+      if (!auth) {
+        setDataLoading(false);
+        return;
       }
 
       try {
@@ -47,29 +51,31 @@ function FleetMonitor() {
         setError("Gagal memuat data awal.");
         toast.error("Gagal memuat data awal.");
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     fetchInitialData();
-  }, []);
+  }, [auth, authLoading]);
 
   // Effect untuk mengelola listener socket
   useEffect(() => {
-    const handleLocationUpdate = (data) => {
-      setDriverLocations(prevLocations => ({
-        ...prevLocations,
-        [data.driverId]: data.location
-      }));
+    // Subscribe ke channel publik untuk update lokasi
+    const channel = pusher.subscribe('tracking-channel');
 
-      if (mapRef.current && !hasCenteredMapRef.current) {
-        mapRef.current.flyTo([data.location.lat, data.location.lng], 14);
-        hasCenteredMapRef.current = true;
-      }
-    };
+    // Bind ke event 'location-update'
+    channel.bind('location-update', (data) => {
+        setDriverLocations(prevLocations => ({
+            ...prevLocations,
+            [data.driverId]: data.location
+        }));
+        if (mapRef.current && !hasCenteredMapRef.current) {
+            mapRef.current.flyTo([data.location.lat, data.location.lng], 14);
+            hasCenteredMapRef.current = true;
+        }
+    });
 
-    socket.on('locationUpdated', handleLocationUpdate);
     return () => {
-      socket.off('locationUpdated', handleLocationUpdate);
+      pusher.unsubscribe('tracking-channel');
     };
   }, []);
 
@@ -87,7 +93,7 @@ function FleetMonitor() {
     }
   };
 
-  if (loading) return <div className="text-center mt-5"><Spinner animation="border" /></div>;
+  if (authLoading || dataLoading) return <div className="text-center mt-5"><Spinner animation="border" /></div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
   return (

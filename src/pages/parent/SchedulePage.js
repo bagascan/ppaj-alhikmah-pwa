@@ -2,29 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import api from '../../api';
+import { useAuth } from '../../hooks/useAuth';
 
 function SchedulePage() {
   const [myStudents, setMyStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const [parentName, setParentName] = useState(null);
+  const { auth, loading: authLoading } = useAuth();
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowDateString = tomorrow.toISOString().split('T')[0];
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const user = JSON.parse(atob(token.split('.')[1])).user;
-      if (user.role === 'parent') setParentName(user.profileId);
-    }
-  }, []);
-
-  useEffect(() => {
     const fetchStudents = async () => {
-      if (!parentName) return;
+      if (authLoading) return;
+      if (!auth || auth.user.role !== 'parent') {
+        setDataLoading(false);
+        setError("Sesi tidak valid.");
+        return;
+      }
       try {
         // Panggil endpoint yang aman dan efisien untuk wali murid
         const res = await api.get('/students/my-students');
@@ -39,11 +36,11 @@ function SchedulePage() {
       } catch (err) {
         setError("Gagal memuat data siswa.");
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     fetchStudents();
-  }, [parentName, tomorrowDateString]);
+  }, [auth, authLoading, tomorrowDateString]);
 
   const handleScheduleChange = (studentId, value) => {
     setMyStudents(prev => prev.map(s => s._id === studentId ? { ...s, scheduleChoice: value } : s));
@@ -68,7 +65,7 @@ function SchedulePage() {
     }
   };
 
-  if (loading) return <div className="text-center mt-5"><Spinner /></div>;
+  if (authLoading || dataLoading) return <div className="text-center mt-5"><Spinner /></div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
   return (

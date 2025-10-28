@@ -1,7 +1,7 @@
 import Pusher from 'pusher-js';
 
-const pusherInstance = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
-    cluster: process.env.REACT_APP_PUSHER_CLUSTER,
+const pusherInstance = new Pusher(process.env.PUSHER_KEY, {
+    cluster: process.env.PUSHER_CLUSTER,
     authEndpoint: '/api/auth/pusher',
     auth: {
         headers: {
@@ -12,7 +12,7 @@ const pusherInstance = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
 });
 
 /**
- * Objek helper untuk Pusher yang memungkinkan pembaruan token otentikasi secara dinamis.
+ * Objek helper untuk asdasdPusher yang memungkinkan pembaruan token otentikasi secara dinamis.
  * Ini penting untuk memastikan otentikasi private channel berfungsi setelah pengguna login.
  */
 const pusher = {

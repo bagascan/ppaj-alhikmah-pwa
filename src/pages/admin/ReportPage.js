@@ -35,16 +35,11 @@ function ReportPage() {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { auth, loading: authLoading } = useAuth();
 
   // Fetch drivers and zones for filter dropdowns
   useEffect(() => {
     const fetchFilterData = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        // Jika tidak ada token, jangan fetch data. Biarkan ProtectedRoute bekerja.
-        return;
-      }
-
       try {
         const [driversRes, zonesRes] = await Promise.all([
           api.get('/drivers'),
@@ -57,7 +52,7 @@ function ReportPage() {
       }
     };
     fetchFilterData();
-  }, []);
+  }, []); // Data ini statis, tidak perlu auth sebagai dependensi
 
   const handleFilterChange = (e) => {
     setFilters({

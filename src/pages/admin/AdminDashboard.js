@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import api from '../../api';
 import { BsMegaphone } from 'react-icons/bs';
 import { subscribeUser } from '../../utils/push-notifications';
+import { useAuth } from '../../hooks/useAuth';
 import FleetMonitor from './FleetMonitor';
 import StudentList from './StudentList';
 import DriverList from './DriverList';
@@ -17,18 +18,14 @@ function AdminHome() {
   const [message, setMessage] = useState('');
   const [targetZone, setTargetZone] = useState('all');
   const [isSending, setIsSending] = useState(false);
+  const { auth, loading: authLoading } = useAuth();
 
   useEffect(() => {
     // Daftarkan admin untuk notifikasi push
-    subscribeUser('admin');
-
+    if (auth && auth.user.role === 'admin') {
+      subscribeUser('admin');
+    }
     const fetchZones = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        // Jika tidak ada token, jangan fetch data. Biarkan ProtectedRoute bekerja.
-        return;
-      }
-
       try {
         const res = await api.get('/zones');
         setZones(res.data);
@@ -37,7 +34,7 @@ function AdminHome() {
       }
     };
     fetchZones();
-  }, []);
+  }, [auth]);
 
   const handleSendBroadcast = async () => {
     if (!message.trim()) {

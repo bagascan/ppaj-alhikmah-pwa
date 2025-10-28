@@ -37,9 +37,18 @@ router.post('/broadcast', auth, async (req, res) => {
     });
 
     // 3. Kirim notifikasi ke setiap langganan
-    subscriptions.forEach(sub => {
-      webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim broadcast notif:', err));
-    });
+    const pushPromises = subscriptions.map(sub =>
+      webpush.sendNotification(sub.subscription, payload)
+        .catch(error => {
+          if (error.statusCode === 410) {
+            console.log(`Subscription untuk broadcast sudah tidak valid, akan dihapus.`);
+            return Subscription.findByIdAndDelete(sub._id);
+          }
+          console.error('Gagal mengirim broadcast notif:', error.statusCode);
+          return null;
+        })
+    );
+    await Promise.allSettled(pushPromises);
 
     res.json({ msg: `Notifikasi berhasil dikirim ke ${subscriptions.length} perangkat.` });
   } catch (err) {
@@ -86,9 +95,18 @@ router.post('/emergency', auth, async (req, res) => {
         icon: '/logo192.png'
       });
 
-      subscriptions.forEach(sub => {
-        webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif darurat:', err));
-      });
+      const pushPromises = subscriptions.map(sub =>
+        webpush.sendNotification(sub.subscription, payload)
+          .catch(error => {
+            if (error.statusCode === 410) {
+              console.log(`Subscription untuk notif darurat sudah tidak valid, akan dihapus.`);
+              return Subscription.findByIdAndDelete(sub._id);
+            }
+            console.error('Gagal mengirim notif darurat:', error.statusCode);
+            return null;
+          })
+      );
+      await Promise.allSettled(pushPromises);
     }
 
     res.json({ msg: `Notifikasi darurat berhasil dikirim ke ${studentsOnTrip.length} wali murid.` });
@@ -126,9 +144,18 @@ router.post('/request-change', auth, async (req, res) => {
       icon: '/logo192.png'
     });
 
-    subscriptions.forEach(sub => {
-      webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif permohonan ganti:', err));
-    });
+    const pushPromises = subscriptions.map(sub =>
+      webpush.sendNotification(sub.subscription, payload)
+        .catch(error => {
+          if (error.statusCode === 410) {
+            console.log(`Subscription admin sudah tidak valid, akan dihapus.`);
+            return Subscription.findByIdAndDelete(sub._id);
+          }
+          console.error('Gagal mengirim notif permohonan ganti:', error.statusCode);
+          return null;
+        })
+    );
+    await Promise.allSettled(pushPromises);
 
     res.json({ msg: 'Permohonan pergantian supir telah berhasil dikirim ke admin.' });
   } catch (err) {

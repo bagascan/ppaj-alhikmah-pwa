@@ -17,8 +17,11 @@ const pusherInstance = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
  */
 const pusher = {
     subscribe: (channelName) => {
-        // Selalu perbarui header dengan token terbaru sebelum melakukan subscribe
-        pusherInstance.config.auth.headers['x-auth-token'] = localStorage.getItem('token');
+        // Perbarui header HANYA jika channel tersebut adalah private atau presence.
+        // Ini mencegah error saat subscribe ke channel publik yang tidak memiliki config.auth.
+        if (channelName.startsWith('private-') || channelName.startsWith('presence-')) {
+            pusherInstance.config.auth.headers['x-auth-token'] = localStorage.getItem('token');
+        }
         return pusherInstance.subscribe(channelName);
     },
     unsubscribe: (channelName) => pusherInstance.unsubscribe(channelName),

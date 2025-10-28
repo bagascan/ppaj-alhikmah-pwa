@@ -144,10 +144,19 @@ router.post('/', auth, async (req, res) => {
           icon: '/logo192.png'
         });
 
-        subscriptions.forEach(sub => {
+        const pushPromises = subscriptions.map(sub =>
           webpush.sendNotification(sub.subscription, payload)
-            .catch(err => console.error('Gagal mengirim notif tambah siswa:', err));
-        });
+            .catch(error => {
+              if (error.statusCode === 410) {
+                console.log(`Subscription untuk siswa baru sudah tidak valid, akan dihapus.`);
+                return Subscription.findByIdAndDelete(sub._id);
+              }
+              console.error('Gagal mengirim notif tambah siswa:', error.statusCode);
+              return null;
+            })
+        );
+        await Promise.allSettled(pushPromises);
+
       }
     } catch (notificationError) {
       console.error('Error saat mengirim notifikasi siswa baru:', notificationError);
@@ -202,9 +211,18 @@ router.put('/:id', auth, async (req, res) => {
             body: `Data untuk siswa ${updatedStudent.name} di zona Anda telah diperbarui.`,
             icon: '/logo192.png'
           });
-          subscriptions.forEach(sub => {
-            webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update siswa:', err));
-          });
+          const pushPromises = subscriptions.map(sub =>
+            webpush.sendNotification(sub.subscription, payload)
+              .catch(error => {
+                if (error.statusCode === 410) {
+                  console.log(`Subscription untuk update siswa sudah tidak valid, akan dihapus.`);
+                  return Subscription.findByIdAndDelete(sub._id);
+                }
+                console.error('Gagal mengirim notif update siswa:', error.statusCode);
+                return null;
+              })
+          );
+          await Promise.allSettled(pushPromises);
         }
       } catch (notificationError) {
         console.error('Error saat mengirim notifikasi update siswa:', notificationError);
@@ -236,9 +254,18 @@ router.put('/:id', auth, async (req, res) => {
             icon: '/logo192.png'
           });
 
-          subscriptions.forEach(sub => {
-            webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update jadwal:', err));
-          });
+          const pushPromises = subscriptions.map(sub =>
+            webpush.sendNotification(sub.subscription, payload)
+              .catch(error => {
+                if (error.statusCode === 410) {
+                  console.log(`Subscription untuk update jadwal sudah tidak valid, akan dihapus.`);
+                  return Subscription.findByIdAndDelete(sub._id);
+                }
+                console.error('Gagal mengirim notif update jadwal:', error.statusCode);
+                return null;
+              })
+          );
+          await Promise.allSettled(pushPromises);
         }
       } catch (notificationError) {
         console.error('Error saat mengirim notifikasi update jadwal:', notificationError);

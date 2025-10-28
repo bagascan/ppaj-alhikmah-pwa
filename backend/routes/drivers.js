@@ -143,9 +143,18 @@ router.post('/handover', auth, async (req, res) => {
       icon: '/logo192.png'
     });
 
-    subscriptions.forEach(sub => {
-      webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim push notif:', err));
-    });
+    const pushPromises = subscriptions.map(sub =>
+      webpush.sendNotification(sub.subscription, payload)
+        .catch(error => {
+          if (error.statusCode === 410) {
+            console.log(`Subscription untuk handover sudah tidak valid, akan dihapus.`);
+            return Subscription.findByIdAndDelete(sub._id);
+          }
+          console.error('Gagal mengirim notif handover:', error.statusCode);
+          return null;
+        })
+    );
+    await Promise.allSettled(pushPromises);
 
     res.json({ msg: `${studentIds.length} siswa berhasil dipindahkan ke zona ${toDriver.zone}.` });
 

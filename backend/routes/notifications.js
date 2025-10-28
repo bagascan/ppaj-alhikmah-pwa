@@ -95,18 +95,18 @@ router.post('/emergency', auth, async (req, res) => {
         icon: '/logo192.png'
       });
 
-      const pushPromises = subscriptions.map(sub =>
-        webpush.sendNotification(sub.subscription, payload)
-          .catch(error => {
-            if (error.statusCode === 410) {
-              console.log(`Subscription untuk notif darurat sudah tidak valid, akan dihapus.`);
-              return Subscription.findByIdAndDelete(sub._id);
-            }
-            console.error('Gagal mengirim notif darurat:', error.statusCode);
-            return null;
-          })
-      );
-      await Promise.allSettled(pushPromises);
+      // Kirim notifikasi ke setiap langganan dengan aman
+      for (const sub of subscriptions) {
+        try {
+          await webpush.sendNotification(sub.subscription, payload);
+        } catch (error) {
+          console.error('Gagal mengirim notif darurat ke satu subscription:', error.statusCode);
+          if (error.statusCode === 410) {
+            // Hapus subscription yang tidak valid
+            await Subscription.findByIdAndDelete(sub._id);
+          }
+        }
+      }
     }
 
     res.json({ msg: `Notifikasi darurat berhasil dikirim ke ${studentsOnTrip.length} wali murid.` });

@@ -200,15 +200,17 @@ router.post('/pusher', auth, (req, res) => {
   const channel = req.body.channel_name;
   let authResponse;
 
-  // Hanya sertakan `presenceData` jika ini adalah presence channel
+  // Data pengguna yang dibutuhkan Pusher untuk otentikasi.
+  // 'user_id' harus unik untuk setiap pengguna.
+  const userData = {
+    user_id: req.user.id, // Gunakan user.id dari token JWT
+    user_info: { name: req.user.name, role: req.user.role, profileId: req.user.profileId }
+  };
+
   if (channel.startsWith('presence-')) {
-    const presenceData = {
-      user_id: req.user.profileId,
-      user_info: { name: req.user.name, role: req.user.role }
-    };
-    authResponse = req.pusher.authorizeChannel(socketId, channel, presenceData);
+    authResponse = req.pusher.authorizeChannel(socketId, channel, userData);
   } else {
-    authResponse = req.pusher.authorizeChannel(socketId, channel);
+    authResponse = req.pusher.authorizeChannel(socketId, channel, { user_id: req.user.id });
   }
   res.send(authResponse);
 });

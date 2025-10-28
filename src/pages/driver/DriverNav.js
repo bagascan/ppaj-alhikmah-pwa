@@ -241,8 +241,8 @@ function DriverNav() {
     
     // Filter siswa berdasarkan status yang relevan dengan jenis trip
     const relevantStudents = (tripType === 'pickup')
-      ? studentList.filter(s => s.tripStatus === 'at_home')
-      : studentList.filter(s => s.tripStatus === 'at_school');
+      ? studentList.filter(s => s.tripStatus === 'at_home' && s.service?.pickup)
+      : studentList.filter(s => s.tripStatus === 'at_school' && s.service?.dropoff);
     
     // Filter out any points that are null or don't have valid coordinates
     const studentWaypoints = relevantStudents

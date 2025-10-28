@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import L from 'leaflet';
 import { BsPerson, BsFlagFill, BsCheckCircleFill } from 'react-icons/bs';
 import pusher from '../../pusher';
+import { pointToLineDistance, point, lineString } from '@turf/turf';
 import { useAuth } from '../../hooks/useAuth';
 
 // Ikon kustom untuk titik jemput
@@ -29,7 +30,7 @@ const schoolIcon = new L.Icon({
 });
 
 // Komponen Peta untuk Supir (sudah diperbaiki dan ditingkatkan)
-function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
+function DriverMap({ route, waypoints, targetSchools, initialPosition, tripType }) {
   // ... (no changes in this component)
   const driverMarkerRef = useRef(null);
   const [rotationAngle, setRotationAngle] = useState(0);
@@ -44,14 +45,14 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
   }, [isAutoCentering, map]); // Hanya bergantung pada isAutoCentering dan map
 
   // Ikon kendaraan yang bisa berputar (metode stabil)
-  const vehicleIconWithRotation = L.divIcon({
+  const vehicleIconWithRotation = useMemo(() => L.divIcon({
     html: `<div style="transform: rotate(${rotationAngle}deg); transform-origin: center;">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" stroke-width="1.5" stroke="#28a745" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6.5" cy="13.5" r="1.5" /><circle cx="17.5" cy="13.5" r="1.5" /><path d="M5.08 6h13.84a1 1 0 0 1 .8.4l1.2 2.4a1 1 0 0 1 0 1.2l-1.2 2.4a1 1 0 0 1 -.8.4h-13.84a1 1 0 0 1 -.8-.4l-1.2-2.4a1 1 0 0 1 0-1.2l1.2-2.4a1 1 0 0 1 .8-.4z" /><path d="M3 12v-6.5a1.5 1.5 0 0 1 1.5-1.5h15a1.5 1.5 0 0 1 1.5 1.5v6.5" /></svg>
            </div>`,
     className: 'vehicle-icon',
     iconSize: [36, 36],
     iconAnchor: [18, 18],
-  });
+  }), [rotationAngle]);
 
   // Inisialisasi dan update marker supir
   useEffect(() => {
@@ -74,10 +75,17 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
       />
       <Polyline pathOptions={{ color: 'green', weight: 6 }} positions={route} />
-      {pickupList.map(item => (
-        // Perbaikan: Pastikan lokasi adalah array [lat, lng] yang valid
-        item.location?.coordinates &&
-        <Marker key={item._id} position={[item.location.coordinates[1], item.location.coordinates[0]]} icon={pickupIcon}><Popup>Jemput: <strong>{item.name}</strong><br/>{item.address}</Popup></Marker>
+      {/* PERBAIKAN: Tampilkan marker siswa berdasarkan tripType */}
+      {waypoints.studentPoints.map(student => (
+        student.location?.coordinates && (
+          <Marker 
+            key={student._id} 
+            position={[student.location.coordinates[1], student.location.coordinates[0]]} 
+            icon={pickupIcon}
+          >
+            <Popup>{tripType === 'pickup' ? 'Jemput' : 'Antar'}: <strong>{student.name}</strong><br/>{student.address}</Popup>
+          </Marker>
+        )
       ))}
       {targetSchools.map(school => (
         <Marker key={`school-${school._id}`} position={[school.location.coordinates[1], school.location.coordinates[0]]} icon={schoolIcon}><Popup>Tujuan: <strong>{school.name}</strong></Popup></Marker>
@@ -135,8 +143,6 @@ function DriverNav() {
   const [students, setStudents] = useState([]);
   const [schools, setSchools] = useState([]);
   const [roadPath, setRoadPath] = useState([]);
-  const [isRouteLoading, setIsRouteLoading] = useState(true);
-  const [routeError, setRouteError] = useState(null);
   const isFetching = useRef(false);
   const fetchedRoutes = useRef(new Map()); // Cache untuk rute yang sudah di-fetch
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -166,7 +172,7 @@ function DriverNav() {
         setSchools(schoolsRes.data);
       } catch (error) {
         console.error('[DEBUG] Gagal dalam fetchInitialData:', error);
-        setRouteError("Gagal memuat data awal untuk navigasi.");
+        toast.error("Gagal memuat data awal untuk navigasi.");
         console.error(error);
       }
     };
@@ -234,12 +240,12 @@ function DriverNav() {
     if (!startPoint) return [];
     
     // Filter siswa berdasarkan status yang relevan dengan jenis trip
-    const pendingStudents = (tripType === 'pickup')
+    const relevantStudents = (tripType === 'pickup')
       ? studentList.filter(s => s.tripStatus === 'at_home')
       : studentList.filter(s => s.tripStatus === 'at_school');
     
     // Filter out any points that are null or don't have valid coordinates
-    const studentPoints = pendingStudents
+    const studentWaypoints = relevantStudents
       .map(student => {
         const coords = student.location?.coordinates;
         // Pastikan koordinat ada, valid, dan bukan titik default [0,0]
@@ -247,71 +253,84 @@ function DriverNav() {
           return [coords[1], coords[0]]; // [lat, lng]
         }
         return null;
-      })
-      .filter(Boolean);
+      }).filter(Boolean);
 
-    const schoolPoints = targetSchools
+    const schoolWaypoints = targetSchools
       // Filter lokasi sekolah yang tidak valid atau default
       .map(school => school.location?.coordinates && school.location.coordinates.length === 2 && (school.location.coordinates[0] !== 0 || school.location.coordinates[1] !== 0) ? [school.location.coordinates[1], school.location.coordinates[0]] : null)
       .filter(Boolean);
 
     // Susun urutan rute berdasarkan jenis trip
     const points = (tripType === 'pickup')
-      ? [startPoint, ...studentPoints, ...schoolPoints]
-      : [startPoint, ...schoolPoints, ...studentPoints];
+      ? [startPoint, ...studentWaypoints, ...schoolWaypoints]
+      : [startPoint, ...schoolWaypoints, ...studentWaypoints];
 
-    return points;
+    // Kembalikan objek yang lebih deskriptif
+    return {
+      points,
+      studentPoints: relevantStudents, // Kirim data siswa lengkap untuk marker
+      schoolPoints: targetSchools
+    };
   }, [initialPosition, studentList, targetSchools, tripType]);
 
   // PERBAIKAN: Buat kunci string dari waypoints. Ini akan stabil dan tidak berubah
   // jika isi array-nya sama, mencegah loop tak terbatas.
   const waypointsKey = useMemo(() => JSON.stringify(waypoints), [waypoints]);
 
-
-  // Efek untuk fetch rute secara otomatis saat waypoints berubah
-  useEffect(() => {
-    // Jangan lakukan apa-apa jika data inti belum siap
-    if (!loggedInDriver || students.length === 0) {
-      console.log('[DEBUG] Menunggu data inti (supir/siswa) sebelum menghitung rute.');
+  const fetchRoute = useCallback(async () => {
+    console.log('[DEBUG] 3. Memulai fetchRoute...');
+    if (!initialPosition || waypoints.points.length < 2) {
+      console.log('[DEBUG] Tidak cukup titik, membatalkan fetch rute.');
+      setRoadPath([]); // Kosongkan rute jika tidak cukup titik
       return;
     }
 
-    const fetchRoute = async () => {
-      console.log('[DEBUG] 3. Memulai fetchRoute...');
-      if (!initialPosition || waypoints.length < 2) {
-        console.log('[DEBUG] Tidak cukup titik, membatalkan fetch rute.');
-        setRouteError("Tidak ada cukup titik untuk menghitung rute.");
-        return;
-      }
+    if (fetchedRoutes.current.has(waypointsKey)) {
+      setRoadPath(fetchedRoutes.current.get(waypointsKey));
+      console.log('[DEBUG] Rute dimuat dari cache.');
+      return;
+    }
 
-      if (fetchedRoutes.current.has(waypointsKey)) {
-        setRoadPath(fetchedRoutes.current.get(waypointsKey));
-        console.log('[DEBUG] Rute dimuat dari cache.');
-        return;
-      }
+    if (isFetching.current) return;
+    isFetching.current = true;
 
-      if (isFetching.current) return;
-      isFetching.current = true;
-      setIsRouteLoading(true);
-      setRouteError(null);
+    try {
+      console.log('[DEBUG] 4. Mengirim permintaan ke /api/route dengan waypoints:', waypoints.points);
+      const response = await api.post('/route', { waypoints: waypoints.points });
+      const newPath = response.data.paths[0].points.coordinates.map(p => [p[1], p[0]]);
+      setRoadPath(newPath);
+      fetchedRoutes.current.set(waypointsKey, newPath);
+    } catch (error) {
+      console.error('[DEBUG] Gagal mengambil rute:', error);
+      const errorMessage = error.response?.data?.message || "Gagal mengambil rute.";
+      toast.warn(`Tidak dapat menghitung rute: ${errorMessage}`);
+    } finally {
+      isFetching.current = false;
+    }
+  }, [waypointsKey, initialPosition, waypoints]); // Dependensi untuk useCallback
 
-      try {
-        console.log('[DEBUG] 4. Mengirim permintaan ke /api/route dengan waypoints:', waypoints);
-        const response = await api.post('/route', { waypoints });
-        const newPath = response.data.paths[0].points.coordinates.map(p => [p[1], p[0]]);
-        setRoadPath(newPath);
-        fetchedRoutes.current.set(waypointsKey, newPath);
-      } catch (error) {
-        console.error('[DEBUG] Gagal mengambil rute:', error);
-        const errorMessage = error.response?.data?.message || "Gagal mengambil rute.";
-        setRouteError(errorMessage);
-      } finally {
-        setIsRouteLoading(false);
-        isFetching.current = false;
-      }
-    };
+  // Efek untuk mengambil rute HANYA saat waypointsKey berubah (misal: ganti trip, siswa dijemput)
+  useEffect(() => {
+    if (!loggedInDriver || students.length === 0) return;
     fetchRoute();
-  }, [waypointsKey, loggedInDriver, students]); // PERBAIKAN: Hapus waypoints dan initialPosition dari sini
+  }, [waypointsKey, loggedInDriver, students, fetchRoute]);
+
+  // Efek untuk memeriksa jika supir keluar jalur, HANYA saat lokasi berubah
+  useEffect(() => {
+    if (roadPath.length > 0 && realtimeLocation) {
+      const driverPoint = point([realtimeLocation.lng, realtimeLocation.lat]);
+      const routeLine = lineString(roadPath.map(p => [p[1], p[0]]));
+      const distance = pointToLineDistance(driverPoint, routeLine, { units: 'meters' });
+
+      if (distance > 50) {
+        console.log(`[DEBUG] Supir keluar dari rute. Jarak: ${distance.toFixed(2)} meter. Menghitung ulang rute...`);
+        // PERBAIKAN: Hapus rute lama dari cache agar fetchRoute() benar-benar mengambil rute baru.
+        fetchedRoutes.current.delete(waypointsKey);
+        // Panggil fetchRoute secara langsung untuk menghitung ulang
+        fetchRoute();
+      }
+    }
+  }, [realtimeLocation, roadPath, fetchRoute]); // Hanya bergantung pada lokasi real-time
 
   const handleSendEmergency = async (message) => {
     if (!loggedInDriver) {
@@ -335,28 +354,20 @@ function DriverNav() {
       <Col md={8}>
         <Card className="h-100 shadow-sm">
           <Card.Body style={{ height: '80vh', padding: '0', position: 'relative' }}>
-            {isRouteLoading && (
-              <div className="d-flex justify-content-center align-items-center h-100" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 1001}}>
-                <Spinner animation="border" role="status" className="me-2"/>
-                <span>Menghitung rute terbaik...</span>
-              </div>
-            )}
-            {routeError && !isRouteLoading && <Alert variant="danger" className="m-3 position-absolute" style={{top: 0, left: 0, zIndex: 1001}}><strong>Error:</strong> {routeError}</Alert>}
-            {initialPosition && !routeError ? (
+            {initialPosition ? (
               <MapContainer center={initialPosition} zoom={14} style={{ height: '100%', width: '100%' }}>
                 <DriverMap 
                   route={roadPath}
-                  pickupList={studentList.filter(s => s.tripStatus === 'at_home')} // Hanya kirim yang relevan
+                  waypoints={waypoints}
                   targetSchools={targetSchools}
                   initialPosition={initialPosition}
+                  tripType={tripType}
                 />
               </MapContainer>
             ) : (
-              !isRouteLoading && (
                 <div className="d-flex justify-content-center align-items-center h-100 text-center p-3">
                   <p className="text-muted">{!loggedInDriver ? "Gagal memuat data supir. Pastikan server backend berjalan." : (studentList.length === 0 ? "Tidak ada siswa yang perlu dijemput untuk trip ini." : "Lokasi garasi supir tidak ditemukan.")}</p>
                 </div>
-              )
             )}
           </Card.Body>
         </Card>

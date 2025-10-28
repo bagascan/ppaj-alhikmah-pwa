@@ -34,8 +34,8 @@ router.get('/for-parent-tracking', auth, async (req, res) => {
   try {
     const parentName = req.user.profileId;
 
-    // 1. Cari semua siswa milik wali murid ini
-    const myStudents = await Student.find({ parent: parentName });
+    // 1. Cari semua siswa milik wali murid ini dan populate data sekolahnya
+    const myStudents = await Student.find({ parent: parentName }).populate('school');
     if (myStudents.length === 0) {
       return res.status(404).json({ msg: "Siswa tidak ditemukan." });
     }

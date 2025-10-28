@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../../api';
 import { toast } from 'react-toastify';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Marker, Popup } from 'react-leaflet';
 import { Card, Spinner, Alert, Button } from 'react-bootstrap';
 import L from 'leaflet';
 import pusher from '../../pusher';
@@ -13,6 +13,26 @@ const vehicleIcon = L.divIcon({
   className: 'vehicle-icon',
   iconSize: [36, 36],
   iconAnchor: [18, 18],
+});
+
+// Ikon untuk rumah siswa
+const homeIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Ikon untuk sekolah
+const schoolIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
 
 // Komponen Marker Supir yang bisa diupdate secara mandiri
@@ -77,6 +97,7 @@ function MapController({ center }) {
 function TrackPage() {
   const [mapCenter, setMapCenter] = useState(null); // Hanya untuk mengatur pusat peta awal
   const [loading, setLoading] = useState(true);
+  const [myStudents, setMyStudents] = useState([]); // State untuk menyimpan data siswa
   const [drivers, setDrivers] = useState([]); // State untuk banyak supir
   const [error, setError] = useState(null);
   const [driverLocations, setDriverLocations] = useState({}); // State terpusat untuk lokasi
@@ -119,6 +140,7 @@ function TrackPage() {
         const { myStudents, relevantDrivers } = res.data;
 
         // Pengecekan jika tidak ada siswa atau supir yang relevan
+        setMyStudents(myStudents || []);
         if (!myStudents || myStudents.length === 0) {
           throw new Error("Siswa untuk wali murid ini tidak ditemukan.");
         }
@@ -172,6 +194,27 @@ function TrackPage() {
         >
           <MapController center={mapCenter} />
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          
+          {/* Tampilkan marker untuk setiap rumah siswa */}
+          {myStudents.map(student => (
+            student.location?.coordinates && (
+              <Marker 
+                key={`home-${student._id}`} 
+                position={[student.location.coordinates[1], student.location.coordinates[0]]} 
+                icon={homeIcon}
+              >
+                <Popup>Rumah: <strong>{student.name}</strong></Popup>
+              </Marker>
+            )
+          ))}
+
+          {/* Tampilkan marker untuk setiap sekolah (handle duplikat) */}
+          {[...new Map(myStudents.map(item => [item.school?._id, item.school])).values()].map(school => (
+            school?.location?.coordinates && (
+              <Marker key={`school-${school._id}`} position={[school.location.coordinates[1], school.location.coordinates[0]]} icon={schoolIcon}><Popup>Sekolah: <strong>{school.name}</strong></Popup></Marker>
+            )
+          ))}
+
           <DriverMarkers 
             drivers={drivers} 
             driverLocations={driverLocations} 

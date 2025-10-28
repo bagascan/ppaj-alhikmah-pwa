@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../../api';
 import { toast } from 'react-toastify';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
@@ -43,6 +43,26 @@ function DriverMarker({ driver, map, isAutoCentering, isFirstDriver, realtimeLoc
   return null; // Komponen ini tidak merender elemen DOM secara langsung
 }
 
+// Pindahkan DriverMarkers ke luar dan bungkus dengan React.memo
+const DriverMarkers = React.memo(({ drivers, driverLocations, isAutoCentering }) => {
+  const map = useMap();
+  return (
+    <>
+      {drivers.map((driver, index) => (
+        <DriverMarker 
+          key={driver._id} 
+          driver={driver} 
+          realtimeLocation={driverLocations[driver._id]}
+          map={map} 
+          isAutoCentering={isAutoCentering}
+          isFirstDriver={index === 0}
+        />
+      ))}
+    </>
+  );
+});
+
+
 // Komponen untuk mengontrol peta
 function MapController({ center }) {
   const map = useMap();
@@ -62,26 +82,6 @@ function TrackPage() {
   const [driverLocations, setDriverLocations] = useState({}); // State terpusat untuk lokasi
   const [isAutoCentering, setIsAutoCentering] = useState(true);
   const { auth, loading: authLoading } = useAuth();
-
-  // Komponen baru untuk me-render marker.
-  // Dibuat di dalam TrackPage agar bisa mengakses state 'drivers'.
-  function DriverMarkers() {
-    const map = useMap();
-    return (
-      <>
-        {drivers.map((driver, index) => (
-          <DriverMarker 
-            key={driver._id} 
-            driver={driver} 
-            realtimeLocation={driverLocations[driver._id]} // Kirim lokasi real-time sebagai prop
-            map={map} 
-            isAutoCentering={isAutoCentering}
-            isFirstDriver={index === 0} // Tandai supir pertama untuk auto-center
-          />
-        ))}
-      </>
-    );
-  }
 
   // Effect untuk subscribe ke Pusher (HANYA SEKALI)
   useEffect(() => {
@@ -172,7 +172,11 @@ function TrackPage() {
         >
           <MapController center={mapCenter} />
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <DriverMarkers />
+          <DriverMarkers 
+            drivers={drivers} 
+            driverLocations={driverLocations} 
+            isAutoCentering={isAutoCentering} 
+          />
           <Button variant={isAutoCentering ? "primary" : "secondary"} size="sm" style={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }} onClick={() => setIsAutoCentering(!isAutoCentering)}>
             {isAutoCentering ? "Auto-Center: ON" : "Auto-Center: OFF"}
           </Button>

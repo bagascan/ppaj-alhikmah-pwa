@@ -104,7 +104,7 @@ function FleetMonitor() {
           center={fallbackPosition}
           zoom={12}
           style={{ height: '100%', width: '100%' }}
-          whenCreated={mapInstance => { mapRef.current = mapInstance; }}
+          ref={mapRef}
         >
           <TileLayer
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"

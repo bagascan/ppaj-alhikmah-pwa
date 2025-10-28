@@ -198,15 +198,18 @@ router.post('/change-password', auth, async (req, res) => {
 router.post('/pusher', auth, (req, res) => {
   const socketId = req.body.socket_id;
   const channel = req.body.channel_name;
-  
-  // Data pengguna yang akan tersedia di channel
-  const presenseData = {
-    user_id: req.user.profileId,
-    user_info: { name: req.user.name, role: req.user.role }
-  };
+  let authResponse;
 
-  // Gunakan instance pusher dari middleware
-  const authResponse = req.pusher.authorizeChannel(socketId, channel, presenseData);
+  // Hanya sertakan `presenceData` jika ini adalah presence channel
+  if (channel.startsWith('presence-')) {
+    const presenceData = {
+      user_id: req.user.profileId,
+      user_info: { name: req.user.name, role: req.user.role }
+    };
+    authResponse = req.pusher.authorizeChannel(socketId, channel, presenceData);
+  } else {
+    authResponse = req.pusher.authorizeChannel(socketId, channel);
+  }
   res.send(authResponse);
 });
 

@@ -36,57 +36,12 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
   const [isAutoCentering, setIsAutoCentering] = useState(true);
   const map = useMap();
 
-  // Efek animasi pergerakan supir
+  // Efek untuk auto-centering peta ke posisi supir
   useEffect(() => {
-    if (route.length <= 1) return;
-
-    let animationFrameId;
-    const totalDuration = route.length * 100; // Kecepatan animasi
-    const startTime = performance.now();
-
-    const animate = (currentTime) => {
-      const elapsedTime = currentTime - startTime;
-      const progress = elapsedTime / totalDuration;
-
-      if (progress >= 1) {
-        if (driverMarkerRef.current) {
-          driverMarkerRef.current.setLatLng(route[route.length - 1]);
-        }
-        return;
-      }
-
-      const pointIndex = Math.floor(progress * (route.length - 1));
-      const startPoint = route[pointIndex];
-      const endPoint = route[pointIndex + 1] || startPoint;
-      
-      // Pengecekan yang lebih ketat: pastikan startPoint dan endPoint tidak null dan merupakan array yang valid
-      if (!startPoint || !endPoint || !Array.isArray(startPoint) || !Array.isArray(endPoint)) {
-        animationFrameId = requestAnimationFrame(animate);
-        return;
-      }
-
-      const segmentProgress = (progress * (route.length - 1)) - pointIndex;
-      const lat = startPoint[0] + (endPoint[0] - startPoint[0]) * segmentProgress;
-      const lng = startPoint[1] + (endPoint[1] - startPoint[1]) * segmentProgress;
-      const newPosition = [lat, lng];
-      if (driverMarkerRef.current) {
-        driverMarkerRef.current.setLatLng(newPosition);
-      }
-
-      const bearing = Math.atan2(endPoint[1] - startPoint[1], endPoint[0] - startPoint[0]) * 180 / Math.PI;
-      setRotationAngle(bearing);
-
-      if (isAutoCentering) {
-        map.panTo(newPosition);
-      }
-
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [route, isAutoCentering, map]);
+    if (isAutoCentering && driverMarkerRef.current) {
+      map.panTo(driverMarkerRef.current.getLatLng());
+    }
+  }, [isAutoCentering, map]); // Hanya bergantung pada isAutoCentering dan map
 
   // Ikon kendaraan yang bisa berputar (metode stabil)
   const vehicleIconWithRotation = L.divIcon({
@@ -103,8 +58,12 @@ function DriverMap({ route, pickupList, targetSchools, initialPosition }) {
     if (!driverMarkerRef.current && initialPosition) {
       driverMarkerRef.current = L.marker(initialPosition, { icon: vehicleIconWithRotation }).addTo(map);
       driverMarkerRef.current.bindPopup("Posisi Anda");
+    } else if (driverMarkerRef.current && initialPosition) {
+      // Update posisi marker jika initialPosition berubah (dari GPS)
+      driverMarkerRef.current.setLatLng(initialPosition);
     }
-  }, [initialPosition, map, vehicleIconWithRotation, isAutoCentering]);
+  }, [initialPosition, map, vehicleIconWithRotation]);
+
   return (
     <>
       <Button variant={isAutoCentering ? "primary" : "secondary"} size="sm" style={{ position: 'absolute', top: 10, left: 50, zIndex: 1000 }} onClick={() => setIsAutoCentering(!isAutoCentering)}>
@@ -252,14 +211,14 @@ function DriverNav() {
   const initialPosition = useMemo(() => {
     // initialPosition SEKARANG HANYA untuk titik awal rute, bukan posisi real-time.
     // Ini membuatnya stabil dan tidak berubah-ubah.
-    console.log('[DEBUG] Menghitung initialPosition untuk rute...');
-    const garageCoords = loggedInDriver?.location?.coordinates;
-    if (garageCoords && (garageCoords[0] !== 0 || garageCoords[1] !== 0)) {
-      return [garageCoords[1], garageCoords[0]]; // [lat, lng]
+    // Prioritaskan lokasi real-time dari GPS jika ada
+    if (realtimeLocation) {
+      return [realtimeLocation.lat, realtimeLocation.lng];
     }
+    const garageCoords = loggedInDriver?.location?.coordinates;
     // Jika tidak ada sama sekali, gunakan lokasi default
     return [-7.2575, 112.7521]; // Fallback ke lokasi default (Surabaya)
-  }, [loggedInDriver]); // Hapus realtimeLocation dari dependensi
+  }, [loggedInDriver, realtimeLocation]);
 
   // Dapatkan semua sekolah tujuan yang unik dari daftar jemputan
   const targetSchools = useMemo(() => {
@@ -271,11 +230,7 @@ function DriverNav() {
 
   const waypoints = useMemo(() => {
     console.log('[DEBUG] Menghitung ulang waypoints...');
-    // Gunakan realtimeLocation sebagai titik awal JIKA ADA, jika tidak, gunakan initialPosition.
-    // Ini memastikan rute dihitung dari posisi supir saat ini, tanpa membuat loop.
-    const startPoint = realtimeLocation 
-      ? [realtimeLocation.lat, realtimeLocation.lng] 
-      : initialPosition;
+    const startPoint = initialPosition;
     if (!startPoint) return [];
     
     // Filter siswa berdasarkan status yang relevan dengan jenis trip
@@ -306,7 +261,7 @@ function DriverNav() {
       : [startPoint, ...schoolPoints, ...studentPoints];
 
     return points;
-  }, [initialPosition, studentList, targetSchools, realtimeLocation, tripType]);
+  }, [initialPosition, studentList, targetSchools, tripType]);
 
   // PERBAIKAN: Buat kunci string dari waypoints. Ini akan stabil dan tidak berubah
   // jika isi array-nya sama, mencegah loop tak terbatas.

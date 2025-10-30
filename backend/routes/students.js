@@ -16,10 +16,19 @@ const auth = require('../auth'); // 1. Impor middleware auth
 router.get('/', auth, async (req, res) => { // 2. Tambahkan 'auth' sebagai middleware
   try {
     // Populate the 'school' field to get school details (name) instead of just the ID
-    const students = await Student.find()
+    const studentsFromDB = await Student.find()
       .sort({ createdAt: -1 })
       .populate('school', ['name', 'location'])
       .populate('parent', 'name'); // Ambil juga nama dari profil wali murid
+
+    // Transformasi data untuk menyederhanakan struktur parent
+    const students = studentsFromDB.map(student => {
+      const studentObj = student.toObject();
+      // Jika parent berhasil di-populate dan bukan null, ganti objek parent dengan namanya saja.
+      studentObj.parent = student.parent ? student.parent.name : '';
+      return studentObj;
+    });
+
     res.json(students);
   } catch (err) {
     console.error(err.message);

@@ -14,6 +14,7 @@ function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [driverName, setDriverName] = useState(''); // State baru untuk nama supir
   const messagesEndRef = useRef(null); // Tetap gunakan ini untuk auto-scroll
 
   // Ambil driverId dari URL
@@ -43,6 +44,11 @@ function ChatPage() {
         // 3. Buat ID ruang obrolan yang konsisten
         if (!driverId) throw new Error("Supir tidak dipilih.");
         const chatRoomId = [driverId, auth.user.profileId].sort().join('-');
+
+        // PERBAIKAN: Ambil data supir untuk mendapatkan namanya
+        const driverRes = await api.get(`/drivers/${driverId}`);
+        if (!driverRes.data) throw new Error("Data supir tidak ditemukan.");
+        setDriverName(driverRes.data.name);
         setRoom(chatRoomId);
 
         // 5. Ambil riwayat chat
@@ -95,7 +101,7 @@ function ChatPage() {
 
   return (
     <>
-      <h2>Chat</h2>
+      <h2>Chat dengan {driverName || 'Supir'}</h2>
       <Card>
         <Card.Body style={{ height: '60vh', overflowY: 'auto' }}>
           <div className="d-flex flex-column" ref={messagesEndRef}>

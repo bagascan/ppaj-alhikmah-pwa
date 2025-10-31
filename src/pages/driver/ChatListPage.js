@@ -34,8 +34,8 @@ function ChatListPage() {
         console.log('Siswa di Zona:', studentsInZone);
 
         // 4. Buat daftar wali murid yang unik dari siswa-siswa tersebut
-        // PERBAIKAN: Gunakan `item.parent._id` sebagai kunci dan simpan seluruh objek parent
-        // yang sudah di-populate dari backend.
+        // PERBAIKAN: Backend sekarang mengirim objek parent lengkap.
+        // Gunakan `item.parent._id` sebagai kunci Map untuk memastikan keunikan.
         const uniqueParents = [...new Map(studentsInZone.map(item => 
           item.parent ? [item.parent._id, item.parent] : null
         ).filter(Boolean)).values()];

@@ -16,7 +16,7 @@ router.get('/', auth, async (req, res) => {
     const plainZones = zonesFromDB.map(zone => ({
       _id: zone._id,
       name: zone.name,
-      geojson: zone.geojson, // Ganti geometry menjadi geojson
+      geojson: zone.geojson || null, // PERBAIKAN: Beri nilai default null jika geojson tidak ada
     }));
 
     res.json(plainZones);

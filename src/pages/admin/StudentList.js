@@ -312,7 +312,7 @@ function StudentList() {
 
       return (
         student.name.toLowerCase().includes(lowercasedTerm) ||
-        student.parent.toLowerCase().includes(lowercasedTerm) ||
+        (student.parent?.name || '').toLowerCase().includes(lowercasedTerm) || // PERBAIKAN: Cari berdasarkan nama wali
         student.zone.toLowerCase().includes(lowercasedTerm) ||
         student.school?.name.toLowerCase().includes(lowercasedTerm) ||
         (driverForZone && driverForZone.name.toLowerCase().includes(lowercasedTerm)) // Tambahkan pencarian berdasarkan nama supir
@@ -341,7 +341,7 @@ function StudentList() {
               <div className="d-flex justify-content-between">
                 <div>
                   <Card.Title>{student.name} <Badge bg="info">Zona {student.zone}</Badge></Card.Title>
-                  <p className="mb-1 small text-muted">Wali: {student.parent}</p>
+                  <p className="mb-1 small text-muted">Wali: {student.parent?.name || 'N/A'}</p> {/* PERBAIKAN: Tampilkan nama wali */}
                   <p className="mb-1 small text-muted">Sekolah: {student.school?.name || 'N/A'}</p>
                   <p className="mb-0 small">
                     <span className="text-muted">Supir: </span>

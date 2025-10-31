@@ -51,15 +51,12 @@ function DriverDashboard() {
     let errorMsg = `ERROR(${error.code}): ${error.message}`;
     let userFriendlyError = 'Tidak bisa mendapatkan lokasi.';
 
-    if (error.code === 1) { // PERMISSION_DENIED
+    if (error.code === 1) {
+      // PERMISSION_DENIED
       userFriendlyError = 'Akses lokasi ditolak. Mohon izinkan akses lokasi di pengaturan browser/ponsel Anda.';
-    } else if (error.code === 3) { // TIMEOUT
+    } else if (error.code === 3) {
+      // TIMEOUT
       userFriendlyError = 'Waktu pencarian lokasi habis. Coba lagi di area dengan sinyal GPS yang lebih baik (misal: di luar ruangan).';
-    }
-
-    // Jika error adalah timeout, hentikan pelacakan agar supir bisa mencoba lagi.
-    if (isTracking) {
-      setIsTracking(false);
     }
     setLocationError(userFriendlyError);
     toast.error(userFriendlyError);
@@ -78,43 +75,47 @@ function DriverDashboard() {
         return;
       }
 
-      // Langkah 1: Coba dapatkan lokasi awal dengan timeout lebih panjang
       toast.info('Mencari sinyal lokasi...');
-      const highAccuracyOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }; // Timeout 20 detik
-      const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }; // Timeout 10 detik
+      const highAccuracyOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+      const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 };
 
       const startWatching = (initialPosition) => {
         toast.success('Sinyal lokasi ditemukan! Pelacakan diaktifkan.');
         const { latitude, longitude } = initialPosition.coords;
         api.post('/drivers/location', { lat: latitude, lng: longitude });
         setLocationError(null);
+        setIsTracking(true);
 
-        // Langkah 2: Setelah lokasi awal didapat, mulai watchPosition untuk update real-time
+        // Setelah lokasi awal didapat, mulai watchPosition untuk update real-time
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
                 api.post('/drivers/location', { lat: latitude, lng: longitude });
                 setLocationError(null); // Hapus error jika berhasil
             },
-            handleLocationError,
-            highAccuracyOptions // Gunakan opsi akurasi tinggi untuk pelacakan
+            (err) => {
+              // Error saat watchPosition biasanya lebih minor (sinyal hilang sementara)
+              // jadi kita hanya log di console dan tampilkan pesan singkat.
+              console.error("Watch Position Error:", err.message);
+              setLocationError("Sinyal lokasi terputus sementara.");
+            },
+            highAccuracyOptions // Selalu coba akurasi tinggi untuk pelacakan
         );
-        setIsTracking(true);
       };
 
+      // Coba dapatkan lokasi awal dengan akurasi tinggi
       navigator.geolocation.getCurrentPosition(
           startWatching,
           (err) => {
-            // Jika akurasi tinggi gagal (terutama karena timeout), coba lagi dengan akurasi rendah.
-            if (err.code === 3) { // TIMEOUT
+            // Jika gagal (karena timeout atau alasan lain), coba lagi dengan akurasi rendah.
+            if (err.code === 3) {
               toast.warn('Akurasi tinggi gagal, mencoba dengan akurasi standar...');
               navigator.geolocation.getCurrentPosition(
                 startWatching,
-                handleLocationError, // Jika ini juga gagal, tampilkan error akhir.
+                handleLocationError, // Jika ini juga gagal, tampilkan error yang lebih jelas.
                 lowAccuracyOptions
               );
             } else {
-              // Untuk error lain (misal: permission denied), langsung tampilkan.
               handleLocationError(err);
             }
           },

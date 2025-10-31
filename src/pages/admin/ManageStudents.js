@@ -124,7 +124,7 @@ function ManageStudents({ students, setStudents }) {
         return (
           student.name.toLowerCase().includes(term) ||
           student.address.toLowerCase().includes(term) ||
-          student.parent.toLowerCase().includes(term) ||
+          (student.parent?.name || '').toLowerCase().includes(term) || // PERBAIKAN: Cari berdasarkan nama wali
           (student.school && student.school.toLowerCase().includes(term))
         );
       });
@@ -227,7 +227,7 @@ function ManageStudents({ students, setStudents }) {
                     <td>{indexOfFirstItem + index + 1}</td>
                     <td>{student.name}</td>
                     <td>{student.address}</td>
-                    <td>{student.parent}</td>
+                    <td>{student.parent?.name || 'N/A'}</td> {/* PERBAIKAN: Tampilkan nama wali */}
                     <td>{student.zone}</td>
                     <td>{student.school}</td>
                     <td>{student.status}</td>

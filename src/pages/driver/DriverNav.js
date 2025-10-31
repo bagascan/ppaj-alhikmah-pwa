@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import api from '../../api';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import { Card, Row, Col, ListGroup, Button, Spinner, Alert, Nav, Modal, Form } from 'react-bootstrap';
+import { Card, Row, Col, ListGroup, Button, Spinner, Nav, Modal, Form, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import L from 'leaflet';
 import { BsPerson, BsFlagFill, BsCheckCircleFill } from 'react-icons/bs';
@@ -29,31 +29,41 @@ const schoolIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+// PERBAIKAN: Ikon baru untuk waypoint yang sudah selesai
+const completedIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 // Komponen Peta untuk Supir (sudah diperbaiki dan ditingkatkan)
 function DriverMap({ route, waypoints, targetSchools, initialPosition, tripType }) {
   // ... (no changes in this component)
-  const driverMarkerRef = useRef(null);
-  const [rotationAngle, setRotationAngle] = useState(0);
+  const driverMarkerRef = useRef(null); // Ref untuk marker supir
+  const rotationAngle = 0; // PERBAIKAN: rotationAngle tidak diubah secara dinamis, jadi tidak perlu state
   const [isAutoCentering, setIsAutoCentering] = useState(true);
   const map = useMap();
 
-  // Efek untuk auto-centering peta ke posisi supir
+  // Efek untuk auto-centering peta ke posisi supir dan menyesuaikan zoom
   useEffect(() => {
     if (isAutoCentering && driverMarkerRef.current) {
-      map.panTo(driverMarkerRef.current.getLatLng());
+      map.flyTo(driverMarkerRef.current.getLatLng(), 15); // Gunakan flyTo untuk transisi yang lebih halus
     }
-  }, [isAutoCentering, map]); // Hanya bergantung pada isAutoCentering dan map
+  }, [isAutoCentering, map, initialPosition]); // Tambahkan initialPosition agar re-center saat posisi berubah
 
   // Ikon kendaraan yang bisa berputar (metode stabil)
   const vehicleIconWithRotation = useMemo(() => L.divIcon({
-    html: `<div style="transform: rotate(${rotationAngle}deg); transform-origin: center;">
+    html: `<div style="transform: rotate(${rotationAngle}deg); transform-origin: center;"> 
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" stroke-width="1.5" stroke="#28a745" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6.5" cy="13.5" r="1.5" /><circle cx="17.5" cy="13.5" r="1.5" /><path d="M5.08 6h13.84a1 1 0 0 1 .8.4l1.2 2.4a1 1 0 0 1 0 1.2l-1.2 2.4a1 1 0 0 1 -.8.4h-13.84a1 1 0 0 1 -.8-.4l-1.2-2.4a1 1 0 0 1 0-1.2l1.2-2.4a1 1 0 0 1 .8-.4z" /><path d="M3 12v-6.5a1.5 1.5 0 0 1 1.5-1.5h15a1.5 1.5 0 0 1 1.5 1.5v6.5" /></svg>
            </div>`,
     className: 'vehicle-icon',
     iconSize: [36, 36],
     iconAnchor: [18, 18],
   }), [rotationAngle]);
-
+  
   // Inisialisasi dan update marker supir
   useEffect(() => {
     if (!driverMarkerRef.current && initialPosition) {
@@ -62,8 +72,11 @@ function DriverMap({ route, waypoints, targetSchools, initialPosition, tripType 
     } else if (driverMarkerRef.current && initialPosition) {
       // Update posisi marker jika initialPosition berubah (dari GPS)
       driverMarkerRef.current.setLatLng(initialPosition);
+      if (isAutoCentering) {
+        map.panTo(initialPosition);
+      }
     }
-  }, [initialPosition, map, vehicleIconWithRotation]);
+  }, [initialPosition, map, vehicleIconWithRotation, isAutoCentering]); // PERBAIKAN: Tambahkan isAutoCentering
 
   return (
     <>
@@ -78,11 +91,18 @@ function DriverMap({ route, waypoints, targetSchools, initialPosition, tripType 
       {/* PERBAIKAN: Tampilkan marker siswa berdasarkan tripType */}
       {waypoints.studentPoints.map(student => (
         student.location?.coordinates && (
-          <Marker 
-            key={student._id} 
-            position={[student.location.coordinates[1], student.location.coordinates[0]]} 
-            icon={pickupIcon}
-          >
+          <Marker
+            key={student._id}
+            position={[student.location.coordinates[1], student.location.coordinates[0]]}
+            // PERBAIKAN: Pilih ikon berdasarkan status trip siswa
+            icon={
+              (tripType === 'pickup' && student.tripStatus === 'at_home') ||
+              (tripType === 'dropoff' && student.tripStatus === 'at_school')
+                ? pickupIcon // Biru untuk tugas yang belum selesai
+                : completedIcon // Abu-abu untuk tugas yang sudah selesai
+            }
+            opacity={ (tripType === 'pickup' && student.tripStatus === 'at_home') || (tripType === 'dropoff' && student.tripStatus === 'at_school') ? 1.0 : 0.6 }
+          > 
             <Popup>{tripType === 'pickup' ? 'Jemput' : 'Antar'}: <strong>{student.name}</strong><br/>{student.address}</Popup>
           </Marker>
         )
@@ -207,6 +227,34 @@ function DriverNav() {
     ).sort((a, b) => a.name.localeCompare(b.name));
   }, [students, loggedInDriver, tripType]);
 
+  // PERBAIKAN: Efek untuk otomatis beralih ke mode 'dropoff'
+  // ketika semua siswa untuk trip 'pickup' sudah tidak lagi 'at_home'.
+  useEffect(() => {
+    // PERBAIKAN FINAL: Logika ini hanya boleh berjalan saat mode 'pickup'.
+    if (tripType !== 'pickup') {
+      return; // Jika sudah bukan mode pickup, hentikan pengecekan.
+    }
+
+    // Ambil semua siswa yang seharusnya masuk dalam trip penjemputan.
+    const pickupCandidates = students.filter(s => s.zone === loggedInDriver?.zone && s.generalStatus === 'Active' && s.service?.pickup);
+    
+    // Jika tidak ada siswa sama sekali untuk dijemput, jangan lakukan apa-apa.
+    if (pickupCandidates.length === 0) {
+      return; // Tidak ada siswa untuk dijemput sama sekali.
+    }
+
+    // PERBAIKAN: Cek apakah SEMUA kandidat jemputan sudah tiba di sekolah.
+    // Trip 'pickup' selesai jika tidak ada lagi siswa yang statusnya 'at_home' ATAU 'picked_up'.
+    const isPickupTripFinished = pickupCandidates.every(s => s.tripStatus === 'at_school' || s.tripStatus === 'absent');
+
+    // Jika semua siswa sudah di sekolah, barulah beralih.
+    if (isPickupTripFinished) {
+      console.log('[DEBUG] Semua siswa telah tiba di sekolah. Beralih otomatis ke mode Antar Pulang.');
+      toast.info("Semua siswa telah tiba di sekolah. Beralih ke mode Antar Pulang.");
+      setTripType('dropoff');
+    }
+  }, [students, loggedInDriver, tripType, setTripType]);
+
   const initialPosition = useMemo(() => {
     // PERBAIKAN: initialPosition sekarang HANYA untuk posisi awal peta dan marker.
     // Ini tidak lagi digunakan untuk menghitung rute secara langsung.
@@ -224,54 +272,88 @@ function DriverNav() {
 
   // Dapatkan semua sekolah tujuan yang unik dari daftar jemputan
   const targetSchools = useMemo(() => {
-    // Ambil semua ID sekolah yang unik dari daftar jemputan
-    const uniqueSchoolIds = [...new Set(studentList.map(student => student.school?._id).filter(Boolean))];
+    // PERBAIKAN: Hitung sekolah tujuan dari SEMUA siswa yang relevan untuk trip 'pickup',
+    // bukan hanya dari daftar yang sudah difilter berdasarkan status. Ini memastikan
+    // sekolah tetap muncul bahkan setelah semua siswa dijemput.
+    const pickupStudents = students.filter(s => s.zone === loggedInDriver?.zone && s.generalStatus === 'Active' && s.service?.pickup);
+    const uniqueSchoolIds = [...new Set(pickupStudents.map(student => student.school?._id).filter(Boolean))];
+    
     // Cari objek sekolah lengkap dari state 'schools' berdasarkan ID yang unik
     return schools.filter(school => uniqueSchoolIds.includes(school._id));
-  }, [studentList, schools]);
+  }, [students, schools, loggedInDriver]);
 
   const waypoints = useMemo(() => {
-    console.log('[DEBUG] Menghitung ulang waypoints...');
-    // PERBAIKAN: Titik awal rute (startPoint) sekarang diambil dari lokasi real-time jika ada,
-    // jika tidak, gunakan lokasi garasi. Ini membuat perhitungan waypoints lebih akurat.
-    const startPoint = realtimeLocation 
-      ? [realtimeLocation.lat, realtimeLocation.lng]
-      : (loggedInDriver?.location?.coordinates ? [loggedInDriver.location.coordinates[1], loggedInDriver.location.coordinates[0]] : null);
-    if (!startPoint) return { points: [], studentPoints: [], schoolPoints: [] };
-    
-    // Filter siswa berdasarkan status yang relevan dengan jenis trip
-    const relevantStudents = (tripType === 'pickup')
-      ? studentList.filter(s => s.tripStatus === 'at_home' && s.service?.pickup)
-      : studentList.filter(s => s.tripStatus === 'at_school' && s.service?.dropoff);
-    
-    // Filter out any points that are null or don't have valid coordinates
-    const studentWaypoints = relevantStudents
-      .map(student => {
-        const coords = student.location?.coordinates;
-        // Pastikan koordinat ada, valid, dan bukan titik default [0,0]
-        if (coords && coords.length === 2 && (coords[0] !== 0 || coords[1] !== 0)) {
-          return [coords[1], coords[0]]; // [lat, lng]
-        }
-        return null;
-      }).filter(Boolean);
+    console.log(`[DEBUG] Menghitung ulang waypoints untuk trip: ${tripType}`);
+    const garageCoords = loggedInDriver?.location?.coordinates;
+    const garagePoint = (garageCoords && (garageCoords[0] !== 0 || garageCoords[1] !== 0)) ? [garageCoords[1], garageCoords[0]] : null;
 
-    const schoolWaypoints = targetSchools
-      // Filter lokasi sekolah yang tidak valid atau default
-      .map(school => school.location?.coordinates && school.location.coordinates.length === 2 && (school.location.coordinates[0] !== 0 || school.location.coordinates[1] !== 0) ? [school.location.coordinates[1], school.location.coordinates[0]] : null)
-      .filter(Boolean);
+    let startPoint = realtimeLocation ? [realtimeLocation.lat, realtimeLocation.lng] : garagePoint;
+    let allRelevantStudents = []; // Semua siswa untuk trip ini (selesai / belum)
+    let remainingWaypoints = []; // Waypoint yang BELUM selesai untuk perhitungan rute
+    let points = [];
 
-    // Susun urutan rute berdasarkan jenis trip
-    const points = (tripType === 'pickup')
-      ? [startPoint, ...studentWaypoints, ...schoolWaypoints]
-      : [startPoint, ...schoolWaypoints, ...studentWaypoints];
+    if (tripType === 'pickup') {
+      // PERBAIKAN: Ambil SEMUA siswa jemputan, baik yang sudah atau belum dijemput
+      allRelevantStudents = studentList.filter(s => ['at_home', 'picked_up'].includes(s.tripStatus) && s.service?.pickup);
+      
+      // Untuk RUTE, hanya gunakan siswa yang BELUM dijemput
+      remainingWaypoints = allRelevantStudents
+        .filter(s => s.tripStatus === 'at_home')
+        .map(student => student.location?.coordinates && (student.location.coordinates[0] !== 0 || student.location.coordinates[1] !== 0) ? [student.location.coordinates[1], student.location.coordinates[0]] : null)
+        .filter(Boolean);
+      
+      const schoolWaypoints = targetSchools
+        .map(school => school.location?.coordinates && (school.location.coordinates[0] !== 0 || school.location.coordinates[1] !== 0) ? [school.location.coordinates[1], school.location.coordinates[0]] : null)
+        .filter(Boolean);
+      
+      if (startPoint) {
+        // Rute dihitung dari posisi supir -> siswa yang belum dijemput -> sekolah
+        points = [startPoint, ...remainingWaypoints, ...schoolWaypoints];
+      }
+    } else {
+      // PERBAIKAN: Untuk trip 'dropoff', tampilkan siswa yang masih di dalam mobil ('picked_up')
+      // dan yang sudah siap diantar pulang ('at_school').
+      allRelevantStudents = studentList.filter(s => ['picked_up', 'at_school'].includes(s.tripStatus) && s.service?.dropoff);
+
+      const firstStudentSchool = allRelevantStudents.length > 0 ? schools.find(s => s._id === allRelevantStudents[0].school?._id) : null;
+      const schoolCoords = firstStudentSchool?.location?.coordinates;
+      const schoolStartPoint = (schoolCoords && (schoolCoords[0] !== 0 || schoolCoords[1] !== 0)) ? [schoolCoords[1], schoolCoords[0]] : null;
+
+      startPoint = schoolStartPoint;
+
+      // PERBAIKAN: Hitung waypoint yang tersisa SEBELUM menyusun array 'points'.
+      // Untuk RUTE, hanya gunakan siswa yang statusnya 'at_school' (belum diantar).
+      remainingWaypoints = allRelevantStudents
+        .filter(s => s.tripStatus === 'at_school')
+        .map(student => student.location?.coordinates && (student.location.coordinates[0] !== 0 || student.location.coordinates[1] !== 0) ? [student.location.coordinates[1], student.location.coordinates[0]] : null)
+        .filter(Boolean);
+      
+      if (startPoint) {
+        // Rute dihitung dari sekolah -> siswa yang belum diantar -> garasi
+        points = [startPoint, ...remainingWaypoints, ...(garagePoint ? [garagePoint] : [])];
+      }
+
+    // PERBAIKAN: Jika trip sudah selesai (tidak ada lagi waypoint tersisa),
+    // kosongkan rute secara eksplisit untuk menghentikan navigasi.
+    if (tripType === 'dropoff' && remainingWaypoints.length === 0 && allRelevantStudents.length > 0) {
+      // Kondisi allRelevantStudents.length > 0 memastikan ini hanya terjadi
+      // setelah ada siswa di daftar, bukan saat daftar masih kosong.
+      console.log('[DEBUG] Trip antar pulang selesai. Mengosongkan rute.');
+      points = []; // Hapus semua titik rute
+    }
+
+
+    }
 
     // Kembalikan objek yang lebih deskriptif
     return {
-      points,
-      studentPoints: relevantStudents, // Kirim data siswa lengkap untuk marker
+      points, // Titik untuk MENGHITUNG RUTE (hanya yang belum selesai)
+      studentPoints: allRelevantStudents, // Semua siswa untuk MENAMPILKAN MARKER di peta
       schoolPoints: targetSchools
     };
-  }, [realtimeLocation, loggedInDriver, studentList, targetSchools, tripType]); // PERBAIKAN: Dependensi yang benar
+    // Untuk debugging, Anda bisa menambahkan ini di dalam useMemo waypoints
+   
+  }, [realtimeLocation, loggedInDriver, studentList, targetSchools, tripType, schools]);
 
   // PERBAIKAN: Buat kunci string dari waypoints. Ini akan stabil dan tidak berubah
   // jika isi array-nya sama, mencegah loop tak terbatas.
@@ -318,7 +400,7 @@ function DriverNav() {
   useEffect(() => {
     if (!loggedInDriver || students.length === 0) return;
     fetchRoute();
-  }, [waypointsKey, loggedInDriver, students, fetchRoute]);
+  }, [fetchRoute, loggedInDriver, students, waypointsKey]); // PERBAIKAN: Tambahkan waypointsKey untuk memenuhi aturan exhaustive-deps
 
   // Efek untuk memeriksa jika supir keluar jalur, HANYA saat lokasi berubah
   useEffect(() => {
@@ -335,7 +417,7 @@ function DriverNav() {
         fetchRoute();
       }
     }
-  }, [realtimeLocation, roadPath, fetchRoute]); // Hanya bergantung pada lokasi real-time
+  }, [realtimeLocation, roadPath, fetchRoute, waypointsKey]); // PERBAIKAN: Tambahkan waypointsKey
 
   const handleSendEmergency = async (message) => {
     if (!loggedInDriver) {
@@ -364,7 +446,8 @@ function DriverNav() {
                 <DriverMap 
                   route={roadPath}
                   waypoints={waypoints}
-                  targetSchools={targetSchools}
+                  // PERBAIKAN: Hanya kirim sekolah sebagai tujuan jika trip adalah 'pickup'
+                  targetSchools={tripType === 'pickup' ? targetSchools : []}
                   initialPosition={initialPosition}
                   tripType={tripType}
                 />
@@ -393,51 +476,58 @@ function DriverNav() {
                 Kirim Info Darurat
               </Button>
             </ListGroup.Item>
-            {tripType === 'pickup' && (
-              <>
-                {studentList.filter(s => s.tripStatus === 'at_home').map((item, index) => (
-                  <ListGroup.Item key={item._id} className="d-flex align-items-start">
-                    <div className="fw-bold me-3">{index + 1}</div>
-                    <BsPerson className="me-3 mt-1 text-primary" size={20} />
-                    <div className="me-auto">
-                      <div className="fw-bold">{item.name}</div>
-                      <small className="text-muted">{item.address}</small>
-                    </div>
-                  </ListGroup.Item>
-                ))}
-                {targetSchools.map((school, index) => (
-                  <ListGroup.Item key={school._id} className="d-flex align-items-start bg-light-subtle">
-                    <div className="fw-bold me-3">{studentList.filter(s => s.tripStatus === 'at_home').length + index + 1}</div>
-                    <BsFlagFill className="me-3 mt-1 text-danger" size={20} />
-                    <div className="me-auto">
-                      <div className="fw-bold">Tujuan: {school.name}</div>
-                      <small className="text-muted">Lokasi Sekolah</small>
-                    </div>
-                  </ListGroup.Item>
-                ))}
-              </>
+            
+            {/* PERBAIKAN: Tampilkan pesan jika tidak ada tugas tersisa */}
+            {waypoints.studentPoints.length === 0 && (
+              <ListGroup.Item>
+                <Alert variant="success" className="text-center">
+                  <BsCheckCircleFill size={30} className="mb-2" />
+                  <p className="mb-0 fw-bold">Semua tugas untuk trip ini telah selesai.</p>
+                </Alert>
+              </ListGroup.Item>
             )}
-            {tripType === 'dropoff' && (
-               studentList.filter(s => s.tripStatus === 'at_school').map((item, index) => (
-                <ListGroup.Item key={item._id} className="d-flex align-items-start">
+
+            {/* PERBAIKAN: Tampilkan semua siswa yang relevan dalam satu daftar */}
+            {waypoints.studentPoints.map((item, index) => {
+              const isTaskDone = (tripType === 'pickup' && item.tripStatus === 'picked_up') || (tripType === 'dropoff' && item.tripStatus === 'dropped_off');
+              return (
+                <ListGroup.Item key={item._id} className={`d-flex align-items-start ${isTaskDone ? 'text-muted bg-light' : ''}`}>
                   <div className="fw-bold me-3">{index + 1}</div>
-                  <BsPerson className="me-3 mt-1 text-info" size={20} />
-                  <div className="me-auto">
+                  {isTaskDone ? (
+                    <BsCheckCircleFill className="me-3 mt-1 text-success" size={20} />
+                  ) : (
+                    <BsPerson className="me-3 mt-1 text-primary" size={20} />
+                  )}
+                  <div className={`me-auto ${isTaskDone ? 'text-decoration-line-through' : ''}`}>
                     <div className="fw-bold">{item.name}</div>
-                    <small className="text-muted">{item.address}</small>
+                    <small>{item.address}</small>
                   </div>
                 </ListGroup.Item>
-              ))
-            )}
-            {studentList.filter(s => s.tripStatus === 'picked_up' || s.tripStatus === 'dropped_off').map((item) => (
-              <ListGroup.Item key={item._id} className="d-flex align-items-start text-muted bg-light">
-                <BsCheckCircleFill className="me-3 mt-1 text-success" size={20} />
-                <div className="me-auto text-decoration-line-through">
-                  <div className="fw-bold">{item.name}</div>
-                  <small>{item.tripStatus === 'picked_up' ? 'Sudah dijemput' : 'Tiba di sekolah'}</small>
+              );
+            })}
+
+            {/* Tampilkan tujuan akhir (sekolah atau garasi) */}
+            {tripType === 'pickup' && targetSchools.map((school, index) => (
+              <ListGroup.Item key={school._id} className="d-flex align-items-start bg-light-subtle">
+                <div className="fw-bold me-3">{waypoints.studentPoints.length + index + 1}</div>
+                <BsFlagFill className="me-3 mt-1 text-danger" size={20} />
+                <div className="me-auto">
+                  <div className="fw-bold">Tujuan: {school.name}</div>
+                  <small className="text-muted">Lokasi Sekolah</small>
                 </div>
               </ListGroup.Item>
             ))}
+
+            {tripType === 'dropoff' && loggedInDriver?.location?.coordinates && (
+              <ListGroup.Item className="d-flex align-items-start bg-light-subtle">
+                <div className="fw-bold me-3">{waypoints.studentPoints.length + 1}</div>
+                <BsFlagFill className="me-3 mt-1 text-danger" size={20} />
+                <div className="me-auto">
+                  <div className="fw-bold">Tujuan Akhir: Garasi</div>
+                  <small className="text-muted">Kembali ke titik awal</small>
+                </div>
+              </ListGroup.Item>
+            )}
           </ListGroup>
         </Card>
       </Col>

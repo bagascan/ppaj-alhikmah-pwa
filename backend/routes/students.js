@@ -15,19 +15,11 @@ const auth = require('../auth'); // 1. Impor middleware auth
 // @access  Private
 router.get('/', auth, async (req, res) => { // 2. Tambahkan 'auth' sebagai middleware
   try {
-    // Populate the 'school' field to get school details (name) instead of just the ID
-    const studentsFromDB = await Student.find()
+    // Populate 'school' dan 'parent' untuk mendapatkan detail, bukan hanya ID.
+    const students = await Student.find()
       .sort({ createdAt: -1 })
       .populate('school', ['name', 'location'])
-      .populate('parent', 'name'); // Ambil juga nama dari profil wali murid
-
-    // Transformasi data untuk menyederhanakan struktur parent
-    const students = studentsFromDB.map(student => {
-      const studentObj = student.toObject();
-      // Jika parent berhasil di-populate dan bukan null, ganti objek parent dengan namanya saja.
-      studentObj.parent = student.parent ? student.parent.name : '';
-      return studentObj;
-    });
+      .populate('parent', ['_id', 'name']); // Ambil _id dan nama dari profil wali murid
 
     res.json(students);
   } catch (err) {
@@ -162,29 +154,35 @@ router.post('/', auth, async (req, res) => {
         }
       }
       
-      // Kirim notifikasi ke supir di zona yang relevan
-      // ... (logika notifikasi yang sudah ada) ...
-      res.json(student);
-    }
-
-    // Kirim notifikasi ke supir di zona yang relevan
-    try {
-      const driver = await Driver.findOne({ zone: student.zone });
-      if (driver) {
-        const subscriptions = await Subscription.find({ userId: driver._id });
-        const payload = JSON.stringify({
-          title: 'Siswa Baru Ditambahkan',
-          body: `Siswa baru, ${student.name}, telah ditambahkan ke zona Anda.`,
-          icon: '/logo192.png'
-        });
-
-        subscriptions.forEach(sub => {
-          webpush.sendNotification(sub.subscription, payload)
-            .catch(err => console.error('Gagal mengirim notif tambah siswa:', err));
-        });
+      // PERBAIKAN: Pindahkan logika notifikasi ke dalam blok ini agar `student` terjamin ada.
+      try {
+        const driver = await Driver.findOne({ zone: student.zone });
+        if (driver) {
+          // Cari user ID supir untuk mencari subscription
+          const driverUser = await User.findOne({ profileId: driver._id });
+          if (driverUser) {
+            const subscriptions = await Subscription.find({ userId: driverUser._id });
+            const payload = JSON.stringify({
+              title: 'Siswa Baru Ditambahkan',
+              body: `Siswa baru, ${student.name}, telah ditambahkan ke zona Anda.`,
+              icon: '/logo192.png'
+            });
+    
+            subscriptions.forEach(sub => {
+              webpush.sendNotification(sub.subscription, payload)
+                .catch(err => console.error('Gagal mengirim notif tambah siswa:', err));
+            });
+          }
+        }
+      } catch (notificationError) {
+        console.error('Error saat mengirim notifikasi siswa baru:', notificationError);
       }
-    } catch (notificationError) {
-      console.error('Error saat mengirim notifikasi siswa baru:', notificationError);
+
+      res.json(student);
+    } else {
+      // Jika tidak ada parentUserData, simpan saja data siswa dan kirim respons
+      const student = await newStudent.save();
+      res.json(student);
     }
   } catch (err) {
     console.error("Error di POST /api/students:", err.message);
@@ -227,16 +225,19 @@ router.put('/:id', auth, async (req, res) => {
     if (!tripStatus) {
       try {
         const driver = await Driver.findOne({ zone: updatedStudent.zone });
-        if (driver) {
-          const subscriptions = await Subscription.find({ userId: driver._id });
-          const payload = JSON.stringify({
-            title: 'Data Siswa Diperbarui',
-            body: `Data untuk siswa ${updatedStudent.name} di zona Anda telah diperbarui.`,
-            icon: '/logo192.png'
-          });
-          subscriptions.forEach(sub => {
-            webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update siswa:', err));
-          });
+        if (driver) { // PERBAIKAN: Logika notifikasi yang benar
+          const driverUser = await User.findOne({ profileId: driver._id });
+          if (driverUser) {
+            const subscriptions = await Subscription.find({ userId: driverUser._id });
+            const payload = JSON.stringify({
+              title: 'Data Siswa Diperbarui',
+              body: `Data untuk siswa ${updatedStudent.name} di zona Anda telah diperbarui.`,
+              icon: '/logo192.png'
+            });
+            subscriptions.forEach(sub => {
+              webpush.sendNotification(sub.subscription, payload).catch(err => console.error('Gagal mengirim notif update siswa:', err));
+            });
+          }
         }
       } catch (notificationError) {
         console.error('Error saat mengirim notifikasi update siswa:', notificationError);
@@ -279,83 +280,14 @@ router.put('/:id', auth, async (req, res) => {
 
     // Jika yang diupdate adalah tripStatus, buat atau perbarui TripLog
     if (tripStatus) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set waktu ke awal hari
-
-      // Cari supir berdasarkan zona siswa yang diupdate
-      const driver = await Driver.findOne({ zone: updatedStudent.zone });
-
-      if (driver) {
-        await TripLog.findOneAndUpdate(
-          { student: student._id, date: today },
-          {
-            $set: { driver: driver._id, student: student._id },
-            $push: { events: { status: tripStatus, timestamp: new Date() } },
-          },
-          { upsert: true, new: true } // `upsert: true` akan membuat dokumen baru jika tidak ditemukan
-        );
-      } else {
-        console.warn(`Tidak ada supir ditemukan untuk zona ${updatedStudent.zone} saat mencatat riwayat.`);
-      }
-
-      // Kirim notifikasi real-time ke wali murid
-      // PERBAIKAN: Dapatkan profil Parent untuk mendapatkan namanya
-      const parentProfile = await Parent.findById(updatedStudent.parent);
-      const parentId = parentProfile ? parentProfile.name : null;
-
-      if (parentId) {
-        // Buat pesan yang lebih deskriptif
-        let statusMessage = `Status ananda ${updatedStudent.name} telah diperbarui.`;
-        const statusMap = {
-          'picked_up': `telah dijemput dari rumah.`,
-          'at_school': `telah tiba di sekolah.`,
-          'dropped_off': `telah diantar pulang ke rumah.`,
-          'absent': `dinyatakan tidak hadir hari ini.`
-        };
-        if (statusMap[tripStatus]) {
-          statusMessage = `Ananda ${updatedStudent.name} ${statusMap[tripStatus]}`;
-        }
-
-        const notificationData = {
-          studentName: updatedStudent.name,
-          status: tripStatus,
-          message: statusMessage
-        };
-        // Menggunakan Pusher
-        // Channel dibuat private untuk keamanan, misal: 'private-parent-wali1'
-        const channelName = `private-parent-${parentId}`;
-        req.pusher.trigger(channelName, 'student-status-update', notificationData);
-        console.log(`[Pusher] Triggered 'student-status-update' on channel '${channelName}'`);
-
-        // Kirim Web Push Notification
-        try {
-          // PERBAIKAN: Cari user berdasarkan profileId (ObjectId) dari siswa yang diupdate
-          const subscriptions = await Subscription.find({ userId: updatedStudent.parent });
-          const payload = JSON.stringify({ title: 'Update Status Antar-Jemput', body: notificationData.message, icon: '/logo192.png' });
-
-          // PERBAIKAN DEFINITIF: Gunakan Promise.allSettled untuk mengirim notifikasi secara aman.
-          // Ini akan mencegah server crash jika salah satu subscription tidak valid.
-          const pushPromises = subscriptions.map(sub =>
-            webpush.sendNotification(sub.subscription, payload)
-              .catch(error => {
-                // Jika subscription tidak valid (misal: error 410 Gone), kita bisa menghapusnya dari database.
-                if (error.statusCode === 410) {
-                  console.log(`Subscription ${sub._id} sudah tidak valid, akan dihapus.`);
-                  return Subscription.findByIdAndDelete(sub._id);
-                }
-                console.error('Gagal mengirim push notification:', error.statusCode, error.body);
-                // Return null atau Promise yang resolve agar allSettled tidak menganggapnya sebagai error besar
-                return null;
-              })
-          );
-          await Promise.allSettled(pushPromises);
-        } catch (pushError) {
-          console.error('Error saat mencari langganan untuk push notif:', pushError);
-        }
-      }
+      // Panggil fungsi helper tanpa 'await' untuk menjalankannya di background
+      // PERBAIKAN FINAL: Panggil helper tanpa argumen tanggal.
+      // Fungsi helper akan membuat tanggalnya sendiri secara mandiri.
+      handlePostTripUpdate(updatedStudent._id, tripStatus);
     }
 
     res.json(updatedStudent);
+  // PERBAIKAN: Tambahkan kurung kurawal penutup untuk blok 'try' utama.
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -379,5 +311,115 @@ router.delete('/:id', auth, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
+
+// =================================================================
+// == HELPER FUNCTIONS
+// =================================================================
+
+// PERBAIKAN DEFINITIF: Fungsi sekarang menerima objek Date yang sudah jadi.
+async function handlePostTripUpdate(studentId, tripStatus) {
+  try {
+    console.log(`\n[DEBUG] 1. Memulai handlePostTripUpdate untuk studentId: ${studentId} dengan status: ${tripStatus}`);
+
+    // PERBAIKAN DEFINITIF: Hapus date-fns-tz dan gunakan kode native JavaScript.
+    // Ini akan membuat fungsi ini mandiri dan tidak bergantung pada scope luar.
+    const now = new Date();
+    const year = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', year: 'numeric' });
+    const month = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', month: '2-digit' });
+    const day = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', day: '2-digit' });
+    const startOfTodayJakartaUTC = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+
+     console.log('[DEBUG] 2. Mencari data siswa...');
+    const student = await Student.findById(studentId).populate('parent', '_id name');
+    if (!student) {
+      console.error(`[DEBUG] GAGAL: Tidak dapat menemukan siswa dengan ID: ${studentId}. Proses dihentikan.`);
+      return;
+    }
+    console.log(`[DEBUG] 2a. Siswa ditemukan: ${student.name}`);
+
+    console.log('[DEBUG] 3. Menerima data tanggal yang sudah diproses.');
+
+    console.log(`[DEBUG] 3a. Tanggal (UTC) untuk query: ${startOfTodayJakartaUTC.toISOString()}`);
+
+    console.log(`[DEBUG] 4. Mencari supir untuk zona: ${student.zone}...`);
+    const driver = await Driver.findOne({ zone: student.zone });
+    if (!driver) {
+      console.warn(`[TripLog] Tidak ada supir ditemukan untuk zona ${student.zone}.`);
+    }else {
+      console.log(`[DEBUG] 4a. Supir ditemukan: ${driver.name}`);
+    }
+
+    const tripLogQuery = { student: student._id, date: startOfTodayJakartaUTC };
+    const tripLogUpdate = {
+      $setOnInsert: { driver: driver ? driver._id : null, student: student._id, date: startOfTodayJakartaUTC },
+      $push: { events: { status: tripStatus, timestamp: new Date() } },
+    };
+
+    console.log('[DEBUG] 5. Akan menjalankan TripLog.findOneAndUpdate dengan data:');
+    console.log('   - Query:', JSON.stringify(tripLogQuery, null, 2));
+    console.log('   - Update:', JSON.stringify(tripLogUpdate, null, 2));
+
+    await TripLog.findOneAndUpdate(
+      tripLogQuery,
+      tripLogUpdate,
+      { upsert: true, new: true }
+    );
+
+    // 2. Mengirim Notifikasi Push ke Wali Murid
+     console.log('[DEBUG] 6. SUKSES menyimpan data ke TripLog.');
+
+    console.log('[DEBUG] 7. Memulai proses notifikasi...');
+    const parentProfileId = student.parent?._id;
+    if (parentProfileId) {
+      console.log(`[DEBUG] 7a. Ditemukan parentProfileId: ${parentProfileId}`);
+      const statusMap = {
+        'picked_up': `telah dijemput dari rumah.`,
+        'at_school': `telah tiba di sekolah.`,
+        'dropped_off': `telah diantar pulang ke rumah.`,
+        'absent': `dinyatakan tidak hadir hari ini.`,
+      };
+      const statusText = statusMap[tripStatus] || `statusnya telah diperbarui menjadi ${tripStatus}`;
+      const message = `Ananda ${student.name} ${statusText}`;
+       console.log(`[DEBUG] 7b. Mengirim notifikasi dengan pesan: "${message}"`);
+      sendPushNotificationToParent(parentProfileId, message);
+    } else {
+      console.log('[DEBUG] 7a. Tidak ditemukan parentProfileId, notifikasi dilewati.');
+    }
+    console.log('[DEBUG] 8. Proses handlePostTripUpdate selesai tanpa error.');
+  } catch (error) {
+    console.error('Error pada proses post-trip-update:', error);
+    console.error('\n[DEBUG] GAGAL TOTAL PADA PROSES post-trip-update:', error);
+  }
+}
+
+// Fungsi helper untuk mengirim notifikasi secara asinkron (fire and forget)
+async function sendPushNotificationToParent(parentProfileId, message) {
+  try {
+    const parentUser = await User.findOne({ profileId: parentProfileId });
+    if (!parentUser) {
+      console.warn(`[Notifikasi] User untuk profil wali ${parentProfileId} tidak ditemukan. Notifikasi dilewati.`);
+      return;
+    }
+
+    const subscriptions = await Subscription.find({ userId: parentUser._id });
+    if (subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({ title: 'Update Status Antar-Jemput', body: message, icon: '/logo192.png' });
+
+    const pushPromises = subscriptions.map(sub =>
+      webpush.sendNotification(sub.subscription, payload).catch(error => {
+        if (error.statusCode === 410) {
+          console.log(`Subscription ${sub._id} sudah tidak valid, akan dihapus.`);
+          return Subscription.findByIdAndDelete(sub._id);
+        }
+        console.error('Gagal mengirim push notification:', error.body);
+      })
+    );
+
+    await Promise.allSettled(pushPromises);
+  } catch (error) {
+    console.error('Error dalam proses pengiriman notifikasi push:', error);
+  }
+}
 
 module.exports = router;

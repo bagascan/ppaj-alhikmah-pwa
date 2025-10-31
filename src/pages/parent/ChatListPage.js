@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Spinner, Alert } from 'react-bootstrap';
+import { Card, Spinner, Alert, ListGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import api from '../../api';
 import { toast } from 'react-toastify';
@@ -31,19 +31,24 @@ function ParentChatListPage() {
 
   return (
     <>
-      <h2 className="mt-3">Pilih Supir untuk Chat</h2>
-      {driverList.length > 0 ? (
-        driverList.map((driver) => (
-          <Card as={Link} to={`/parent/chat/${driver._id}`} key={driver._id} className="mb-3 text-decoration-none text-dark shadow-sm">
-            <Card.Body>
-              <Card.Title className="mb-1">{driver.name}</Card.Title>
-              <Card.Text className="text-muted small">Supir untuk Zona {driver.zone}</Card.Text>
-            </Card.Body>
-          </Card>
-        ))
-      ) : (
-        <Alert variant="info">Tidak ada supir yang ditugaskan untuk anak Anda saat ini.</Alert>
-      )}
+      <h2>Pilih Supir</h2>
+      <Card>
+        <ListGroup variant="flush">
+          {driverList.length > 0 ? (
+            driverList.map(driver => (
+              <ListGroup.Item action as={Link} to={`/parent/chat/${driver._id}`} key={driver._id}>
+                <div className="fw-bold">{driver.name}</div>
+                <small className="text-muted">Supir untuk Zona {driver.zone}</small>
+              </ListGroup.Item>
+            ))
+          ) : (
+            // PERBAIKAN: Tambahkan prop 'key' yang unik
+            <ListGroup.Item key="no-drivers">
+              Tidak ada supir yang terhubung dengan anak Anda.
+            </ListGroup.Item>
+          )}
+        </ListGroup>
+      </Card>
     </>
   );
 }

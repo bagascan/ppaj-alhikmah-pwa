@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api'; // Ganti axios dengan api
-import { MapContainer, TileLayer, FeatureGroup, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, FeatureGroup, GeoJSON, LayersControl } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import { Card } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -120,6 +120,21 @@ function ZoneEditor() {
       <Card.Header as="h5">Editor Zona</Card.Header>
       <Card.Body style={{ height: '70vh', padding: '0' }}>
         <MapContainer center={surabayaPosition} zoom={12} style={{ height: '100%', width: '100%' }}>
+          {/* PERBAIKAN: Menambahkan kontrol untuk memilih layer peta */}
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Peta Jalan">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Peta Satelit">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
           <FeatureGroup ref={featureGroupRef}>
             <EditControl
               position="topright"
@@ -144,10 +159,6 @@ function ZoneEditor() {
               );
             })}
           </FeatureGroup>
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          />
         </MapContainer>
       </Card.Body>
     </Card>

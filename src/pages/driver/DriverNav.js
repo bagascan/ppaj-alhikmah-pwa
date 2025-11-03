@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import api from '../../api';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl } from 'react-leaflet';
 import { Card, Row, Col, ListGroup, Button, Spinner, Nav, Modal, Form, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import L from 'leaflet';
 import { BsPerson, BsFlagFill, BsCheckCircleFill } from 'react-icons/bs';
 import pusher from '../../pusher';
 import { pointToLineDistance, point, lineString } from '@turf/turf';
+import NotificationButton from '../../components/NotificationButton'; // PERBAIKAN: Impor komponen baru
 import { useAuth } from '../../hooks/useAuth';
 
 // Ikon kustom untuk titik jemput
@@ -83,10 +84,23 @@ function DriverMap({ route, waypoints, targetSchools, initialPosition, tripType 
       <Button variant={isAutoCentering ? "primary" : "secondary"} size="sm" style={{ position: 'absolute', top: 10, left: 50, zIndex: 1000 }} onClick={() => setIsAutoCentering(!isAutoCentering)}>
         {isAutoCentering ? "Auto-Center: ON" : "Auto-Center: OFF"}
       </Button>
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      />
+      
+      {/* PERBAIKAN: Menambahkan kontrol untuk memilih layer peta */}
+      <LayersControl position="topright">
+        <LayersControl.BaseLayer checked name="Peta Jalan">
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Peta Satelit">
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+          />
+        </LayersControl.BaseLayer>
+      </LayersControl>
+
       <Polyline pathOptions={{ color: 'green', weight: 6 }} positions={route} />
       {/* PERBAIKAN: Tampilkan marker siswa berdasarkan tripType */}
       {waypoints.studentPoints.map(student => (
@@ -470,6 +484,11 @@ function DriverNav() {
               <Nav.Link eventKey="dropoff">Antar</Nav.Link>
             </Nav.Item>
           </Nav>
+        {/* PERBAIKAN: Tambahkan tombol notifikasi di dalam area list */}
+        <div className="p-2 border-bottom">
+          {auth && <NotificationButton userId={auth.user.id} />}
+        </div>
+
           <ListGroup variant="flush" style={{ overflowY: 'auto' }}>
             <ListGroup.Item className="text-center">
               <Button variant="outline-danger" size="sm" onClick={() => setShowEmergencyModal(true)}>

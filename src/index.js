@@ -16,10 +16,12 @@ import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <Router>
-    <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
-    <App />
-  </Router>
+  <React.StrictMode>
+    <Router>
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
+      <App />
+    </Router>
+  </React.StrictMode>
 );
 
 // Aktifkan PWA dengan mendaftarkan service worker

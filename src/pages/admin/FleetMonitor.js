@@ -1,77 +1,92 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../../api'; // Gunakan instance api yang sudah memiliki interceptor
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, LayersControl } from 'react-leaflet';
 import { Card, Spinner, Alert } from 'react-bootstrap';
 import L from 'leaflet';
+import api from '../../api';
 import pusher from '../../pusher';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../hooks/useAuth';
 
-// Ikon default untuk supir
+// Ikon untuk shuttle
 const vehicleIcon = L.divIcon({
-  html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" stroke-width="1.5" stroke="#dc3545" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6.5" cy="13.5" r="1.5" /><circle cx="17.5" cy="13.5" r="1.5" /><path d="M5.08 6h13.84a1 1 0 0 1 .8.4l1.2 2.4a1 1 0 0 1 0 1.2l-1.2 2.4a1 1 0 0 1 -.8.4h-13.84a1 1 0 0 1 -.8-.4l-1.2-2.4a1 1 0 0 1 0-1.2l1.2-2.4a1 1 0 0 1 .8-.4z" /><path d="M3 12v-6.5a1.5 1.5 0 0 1 1.5-1.5h15a1.5 1.5 0 0 1 1.5 1.5v6.5" /></svg>`,
+  html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" stroke-width="1.5" stroke="#007bff" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6.5" cy="13.5" r="1.5" /><circle cx="17.5" cy="13.5" r="1.5" /><path d="M5.08 6h13.84a1 1 0 0 1 .8.4l1.2 2.4a1 1 0 0 1 0 1.2l-1.2 2.4a1 1 0 0 1 -.8.4h-13.84a1 1 0 0 1 -.8-.4l-1.2-2.4a1 1 0 0 1 0-1.2l1.2-2.4a1 1 0 0 1 .8-.4z" /><path d="M3 12v-6.5a1.5 1.5 0 0 1 1.5-1.5h15a1.5 1.5 0 0 1 1.5 1.5v6.5" /></svg>`,
   className: 'vehicle-icon',
   iconSize: [36, 36],
   iconAnchor: [18, 18],
 });
 
-// Palet warna untuk zona
-const colorPalette = ['#1f78b4', '#33a02c', '#e31a1c', '#ff7f00', '#6a3d9a', '#b15928'];
+// Komponen Marker Supir yang bisa diupdate secara mandiri
+function DriverMarker({ driver, map, realtimeLocation }) {
+  const markerRef = useRef(null);
+
+  // Inisialisasi marker saat pertama kali render
+  useEffect(() => {
+    if (!markerRef.current && driver.location?.coordinates && (driver.location.coordinates[0] !== 0 || driver.location.coordinates[1] !== 0)) {
+      const initialPos = [driver.location.coordinates[1], driver.location.coordinates[0]];
+      markerRef.current = L.marker(initialPos, { icon: vehicleIcon }).addTo(map);
+      markerRef.current.bindTooltip(`Supir: <strong>${driver.name}</strong><br />Zona: ${driver.zone}<br /><em>Posisi di garasi</em>`);
+    }
+  }, [driver, map]);
+
+  // Efek untuk mengupdate posisi marker
+  useEffect(() => {
+    if (realtimeLocation && markerRef.current) {
+      const newPos = [realtimeLocation.lat, realtimeLocation.lng];
+      markerRef.current.setLatLng(newPos);
+      markerRef.current.setTooltipContent(`Supir: <strong>${driver.name}</strong><br />Zona: ${driver.zone}`);
+    }
+  }, [realtimeLocation, driver.name, driver.zone]);
+
+  return null;
+}
+
+// Komponen untuk me-render semua marker supir
+function DriverMarkers({ drivers, driverLocations }) {
+  const map = useMap();
+  return (
+    <>
+      {drivers.map((driver) => (
+        <DriverMarker 
+          key={driver._id} 
+          driver={driver} 
+          realtimeLocation={driverLocations[driver._id]}
+          map={map} 
+        />
+      ))}
+    </>
+  );
+}
 
 function FleetMonitor() {
-  const fallbackPosition = [-7.2575, 112.7521]; // Posisi default Surabaya
   const [drivers, setDrivers] = useState([]);
   const [driverLocations, setDriverLocations] = useState({});
-  const [zones, setZones] = useState([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const mapRef = useRef(null);
-  const hasCenteredMapRef = useRef(false);
-  const { auth, loading: authLoading } = useAuth();
+  const surabayaPosition = [-7.2575, 112.7521]; // Fallback position
 
-  // Ambil data zona dan supir dari API
+  // 1. Fetch data supir awal
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (authLoading) {
-        return; // "Penjaga" untuk mencegah fetch sebelum login
-      }
-      if (!auth) {
-        setDataLoading(false);
-        return;
-      }
-
+    const fetchDrivers = async () => {
       try {
-        const [zonesRes, driversRes] = await Promise.all([
-          api.get('/zones'),
-          api.get('/drivers')
-        ]);
-        setZones(zonesRes.data);
-        setDrivers(driversRes.data);
+        const res = await api.get('/drivers');
+        setDrivers(res.data);
       } catch (err) {
-        setError("Gagal memuat data awal.");
-        toast.error("Gagal memuat data awal.");
+        setError("Gagal memuat data supir.");
+        toast.error("Gagal memuat data supir.");
       } finally {
-        setDataLoading(false);
+        setLoading(false);
       }
     };
-    fetchInitialData();
-  }, [auth, authLoading]);
+    fetchDrivers();
+  }, []);
 
-  // Effect untuk mengelola listener socket
+  // 2. Subscribe ke Pusher untuk update lokasi
   useEffect(() => {
-    // Subscribe ke channel publik untuk update lokasi
     const channel = pusher.subscribe('tracking-channel');
-
-    // Bind ke event 'location-update'
     channel.bind('location-update', (data) => {
-        setDriverLocations(prevLocations => ({
-            ...prevLocations,
-            [data.driverId]: data.location
-        }));
-        if (mapRef.current && !hasCenteredMapRef.current) {
-            mapRef.current.flyTo([data.location.lat, data.location.lng], 14);
-            hasCenteredMapRef.current = true;
-        }
+      setDriverLocations(prevLocations => ({
+        ...prevLocations,
+        [data.driverId]: data.location
+      }));
     });
 
     return () => {
@@ -79,73 +94,39 @@ function FleetMonitor() {
     };
   }, []);
 
-  // Fungsi untuk memberikan style pada poligon zona
-  const styleZone = (index) => {
-    const color = colorPalette[index % colorPalette.length];
-    return { color, weight: 2, fillColor: color, fillOpacity: 0.2 };
-  };
+  if (loading) {
+    return <div className="text-center mt-5"><Spinner animation="border" /> <p>Memuat data armada...</p></div>;
+  }
 
-  // Fungsi untuk mengikat popup ke setiap poligon zona
-  const onEachZone = (feature, layer) => {
-    // Pastikan feature dan properties ada
-    if (feature.properties && feature.properties.name) {
-      layer.bindPopup(`<b>Zona: ${feature.properties.name}</b>`);
-    }
-  };
-
-  if (authLoading || dataLoading) return <div className="text-center mt-5"><Spinner animation="border" /></div>;
-  if (error) return <Alert variant="danger">{error}</Alert>;
+  if (error) {
+    return <Alert variant="danger">{error}</Alert>;
+  }
 
   return (
     <Card>
-      <Card.Header as="h5">Pantauan Armada</Card.Header>
-      <Card.Body style={{ height: '75vh', padding: '0' }}>
-        <MapContainer
-          center={fallbackPosition}
-          zoom={12}
-          style={{ height: '100%', width: '100%' }}
-          ref={mapRef}
-        >
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          />
-
-          {/* Menampilkan Poligon Zona */}
-          {zones.map((zone, index) => {
-            return zone.geojson && (
-              <GeoJSON 
-                key={zone._id} 
-                data={zone.geojson} 
-                style={() => styleZone(index)}
-                onEachFeature={onEachZone} />
-            );
-          })}
-
-          {/* Menampilkan Marker Supir */}
-          {drivers.map(driver => {
-            const location = driverLocations[driver._id];
-            let position;
-            let popupMessage;
-
-            if (location) {
-              position = [location.lat, location.lng];
-              popupMessage = `Supir: <strong>${driver.name}</strong><br/>Zona: ${driver.zone}`;
-            } else if (driver.location?.coordinates && (driver.location.coordinates[0] !== 0 || driver.location.coordinates[1] !== 0)) {
-              position = [driver.location.coordinates[1], driver.location.coordinates[0]];
-              popupMessage = `Supir: <strong>${driver.name}</strong><br/>Zona: ${driver.zone}<br/><em>Posisi di garasi (lokasi belum aktif)</em>`;
-            } else {
-              return null;
-            }
-
-            return (
-              <Marker key={driver._id} position={position} icon={vehicleIcon} opacity={location ? 1.0 : 0.5}>
-                <Popup><div dangerouslySetInnerHTML={{ __html: popupMessage }} /></Popup>
-              </Marker>
-            );
-          })}
+      <Card.Header as="h2">Monitor Armada</Card.Header>
+      <Card.Body style={{ height: '80vh', padding: '0' }}>
+        <MapContainer center={surabayaPosition} zoom={12} style={{ height: '100%', width: '100%' }}>
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Peta Jalan">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Peta Satelit">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
+          <DriverMarkers drivers={drivers} driverLocations={driverLocations} />
         </MapContainer>
       </Card.Body>
+      <Card.Footer className="text-muted">
+        Posisi supir akan diperbarui secara otomatis.
+      </Card.Footer>
     </Card>
   );
 }

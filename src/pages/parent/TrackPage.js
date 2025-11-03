@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
 import { toast } from 'react-toastify';
-import { MapContainer, TileLayer, useMap, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Marker, Popup, LayersControl } from 'react-leaflet';
 import { Card, Spinner, Alert, Button } from 'react-bootstrap';
 import L from 'leaflet';
+import NotificationButton from '../../components/NotificationButton'; // PERBAIKAN: Impor komponen baru
 import pusher from '../../pusher';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -186,6 +187,10 @@ function TrackPage() {
   return (
     <Card>
       <Card.Header as="h5">Lacak Lokasi Shuttle</Card.Header>
+      {/* PERBAIKAN: Tambahkan tombol notifikasi di bawah header */}
+      <div className="p-3 border-bottom">
+        {auth && <NotificationButton userId={auth.user.id} />}
+      </div>
       <Card.Body style={{ height: '75vh', padding: '0' }}>
         <MapContainer 
           center={mapCenter} 
@@ -193,7 +198,21 @@ function TrackPage() {
           style={{ height: '100%', width: '100%' }}
         >
           <MapController center={mapCenter} />
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {/* PERBAIKAN: Menambahkan kontrol untuk memilih layer peta */}
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Peta Jalan">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Peta Satelit">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
           
           {/* Tampilkan marker untuk setiap rumah siswa */}
           {myStudents.map(student => (

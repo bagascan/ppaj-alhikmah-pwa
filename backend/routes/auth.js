@@ -202,13 +202,13 @@ router.post('/pusher', auth, (req, res) => {
 
   // Data pengguna yang akan dikirim ke Pusher.
   // user_id harus unik dan konsisten. Kita gunakan ObjectId dari user.
-  // PERBAIKAN KRITIS: Gunakan profileId agar konsisten dengan ID yang digunakan di frontend chat.
+  // PERBAIKAN KRITIS: Gunakan req.user.id (ObjectId dari koleksi User) agar konsisten dengan nama channel.
   const user_data = {
-    user_id: req.user.profileId, 
+    user_id: req.user.id, 
     user_info: { 
       name: req.user.name, 
       role: req.user.role, 
-      profileId: req.user.profileId 
+      profileId: req.user.profileId // profileId tetap dikirim untuk info tambahan jika perlu
     }
   };
 

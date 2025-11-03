@@ -4,7 +4,7 @@ import { Container, Card, Form, Button, Row, Col, Spinner } from 'react-bootstra
 import { toast } from 'react-toastify';
 import api from '../../api';
 import { BsMegaphone } from 'react-icons/bs';
-import { subscribeUser } from '../../utils/push-notifications';
+import NotificationButton from '../../components/NotificationButton'; // PERBAIKAN: Impor komponen baru
 import { useAuth } from '../../hooks/useAuth';
 import FleetMonitor from './FleetMonitor';
 import StudentList from './StudentList';
@@ -18,13 +18,9 @@ function AdminHome() {
   const [message, setMessage] = useState('');
   const [targetZone, setTargetZone] = useState('all');
   const [isSending, setIsSending] = useState(false);
-  const { auth, loading: authLoading } = useAuth();
+  const { auth } = useAuth();
 
   useEffect(() => {
-    // Daftarkan admin untuk notifikasi push
-    if (auth && auth.user.role === 'admin') {
-      subscribeUser(auth.user.id); // PERBAIKAN: Gunakan user.id (ObjectId)
-    }
     const fetchZones = async () => {
       try {
         const res = await api.get('/zones');
@@ -34,7 +30,7 @@ function AdminHome() {
       }
     };
     fetchZones();
-  }, [auth]);
+  }, []); // PERBAIKAN: Hapus dependensi auth
 
   const handleSendBroadcast = async () => {
     if (!message.trim()) {
@@ -57,6 +53,10 @@ function AdminHome() {
     <>
       <h2>Dasbor Admin</h2>
       <p>Selamat datang di dasbor admin. Silakan pilih menu di bawah untuk mengelola data.</p>
+      
+      {/* PERBAIKAN: Tambahkan tombol notifikasi */}
+      {auth && <NotificationButton userId={auth.user.id} />}
+
       <Card className="mt-4">
         <Card.Header as="h5" className="d-flex align-items-center"><BsMegaphone className="me-2" /> Kirim Pengumuman ke Supir</Card.Header>
         <Card.Body>

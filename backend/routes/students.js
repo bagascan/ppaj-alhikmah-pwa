@@ -158,8 +158,9 @@ router.post('/', auth, async (req, res) => {
       try {
         const driver = await Driver.findOne({ zone: student.zone });
         if (driver) {
-          // Cari user ID supir untuk mencari subscription
+          // PERBAIKAN: Cari User supir berdasarkan profileId
           const driverUser = await User.findOne({ profileId: driver._id });
+          // PERBAIKAN: Gunakan _id dari User untuk mencari subscription
           if (driverUser) {
             const subscriptions = await Subscription.find({ userId: driverUser._id });
             const payload = JSON.stringify({
@@ -226,7 +227,9 @@ router.put('/:id', auth, async (req, res) => {
       try {
         const driver = await Driver.findOne({ zone: updatedStudent.zone });
         if (driver) { // PERBAIKAN: Logika notifikasi yang benar
+          // PERBAIKAN: Cari User supir berdasarkan profileId
           const driverUser = await User.findOne({ profileId: driver._id });
+          // PERBAIKAN: Gunakan _id dari User untuk mencari subscription
           if (driverUser) {
             const subscriptions = await Subscription.find({ userId: driverUser._id });
             const payload = JSON.stringify({
@@ -249,8 +252,12 @@ router.put('/:id', auth, async (req, res) => {
       try {
         const driver = await Driver.findOne({ zone: updatedStudent.zone });
         if (driver) {
-          const subscriptions = await Subscription.find({ userId: driver._id });
-          
+          // PERBAIKAN: Cari User supir berdasarkan profileId
+          const driverUser = await User.findOne({ profileId: driver._id });
+          if (!driverUser) return; // Jika user tidak ditemukan, hentikan
+
+          // PERBAIKAN: Gunakan _id dari User untuk mencari subscription
+          const subscriptions = await Subscription.find({ userId: driverUser._id });
           // Buat pesan yang deskriptif berdasarkan data jadwal
           let scheduleStatusText = '';
           if (nextDayService.isAbsent) {

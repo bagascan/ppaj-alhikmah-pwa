@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { Card, Badge, Spinner, Alert, ListGroup } from 'react-bootstrap';
 import { BsPersonVcard, BsTelephone, BsTruck } from 'react-icons/bs';
-import { useAuth } from '../../hooks/useAuth'; // Impor hook baru
+import { useAuth } from '../../hooks/useAuth';
 
 function DriverProfile() {
   const [driver, setDriver] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { auth, loading: authLoading } = useAuth(); // Gunakan hook
+  const { auth, loading: authLoading } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {

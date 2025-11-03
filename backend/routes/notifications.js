@@ -4,6 +4,7 @@ const webpush = require('web-push');
 const Driver = require('../models/Driver');
 const Student = require('../models/Student');
 const Subscription = require('../models/Subscription');
+const User = require('../models/User'); // PERBAIKAN: Impor model User
 const auth = require('../auth');
 
 // @route   POST api/notifications/broadcast
@@ -25,10 +26,14 @@ router.post('/broadcast', auth, async (req, res) => {
 
     // 1. Temukan semua supir yang sesuai target
     const targetDrivers = await Driver.find(query);
-    const driverIds = targetDrivers.map(d => d._id.toString());
+    const driverProfileIds = targetDrivers.map(d => d._id);
 
-    // 2. Temukan semua langganan notifikasi dari supir-supir tersebut
-    const subscriptions = await Subscription.find({ userId: { $in: driverIds } });
+    // 2. Temukan semua user yang memiliki profileId dari supir-supir tersebut
+    const targetUsers = await User.find({ profileId: { $in: driverProfileIds }, role: 'driver' });
+    const userIds = targetUsers.map(u => u._id);
+
+    // 3. Temukan semua langganan notifikasi dari user-user tersebut
+    const subscriptions = await Subscription.find({ userId: { $in: userIds } });
 
     const payload = JSON.stringify({
       title: 'Pemberitahuan dari Admin',
@@ -36,7 +41,7 @@ router.post('/broadcast', auth, async (req, res) => {
       icon: '/logo192.png'
     });
 
-    // 3. Kirim notifikasi ke setiap langganan
+    // 4. Kirim notifikasi ke setiap langganan
     const pushPromises = subscriptions.map(sub =>
       webpush.sendNotification(sub.subscription, payload)
         .catch(error => {
@@ -86,8 +91,15 @@ router.post('/emergency', auth, async (req, res) => {
 
     // 2. Kirim notifikasi ke setiap wali murid dari siswa tersebut
     for (const student of studentsOnTrip) {
-      const parentId = student.parent;
-      const subscriptions = await Subscription.find({ userId: parentId });
+      const parentProfileId = student.parent;
+      if (!parentProfileId) continue;
+
+      // PERBAIKAN: Cari User wali murid berdasarkan profileId
+      const parentUser = await User.findOne({ profileId: parentProfileId, role: 'parent' });
+      if (!parentUser) continue;
+
+      // PERBAIKAN: Cari subscription berdasarkan _id dari User, bukan profileId
+      const subscriptions = await Subscription.find({ userId: parentUser._id });
 
       const payload = JSON.stringify({
         title: `Info Darurat dari Supir`,
@@ -130,9 +142,12 @@ router.post('/request-change', auth, async (req, res) => {
     const driver = await Driver.findById(driverId);
     if (!driver) return res.status(404).json({ msg: 'Supir tidak ditemukan.' });
 
-    // Asumsi admin memiliki userId 'admin'. Di aplikasi nyata, ini bisa lebih dinamis.
-    const adminUserId = 'admin';
-    const subscriptions = await Subscription.find({ userId: adminUserId });
+    // PERBAIKAN: Cari semua user dengan peran 'admin'
+    const adminUsers = await User.find({ role: 'admin' });
+    const adminUserIds = adminUsers.map(u => u._id);
+
+    // PERBAIKAN: Cari semua subscription milik admin
+    const subscriptions = await Subscription.find({ userId: { $in: adminUserIds } });
 
     if (subscriptions.length === 0) {
       return res.status(200).json({ msg: 'Permohonan terkirim, namun tidak ada admin yang terdaftar untuk notifikasi push.' });

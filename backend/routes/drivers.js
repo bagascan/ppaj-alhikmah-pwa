@@ -136,7 +136,11 @@ router.post('/handover', auth, async (req, res) => {
     await Student.updateMany({ _id: { $in: studentIds } }, { $set: { zone: toDriver.zone } });
 
     // 2. Kirim notifikasi push ke supir pengganti
-    const subscriptions = await Subscription.find({ userId: toDriverId });
+    // PERBAIKAN: Cari User supir berdasarkan profileId
+    const driverUser = await User.findOne({ profileId: toDriver._id, role: 'driver' });
+    if (!driverUser) return res.status(404).json({ msg: 'Akun user untuk supir pengganti tidak ditemukan.' });
+    
+    const subscriptions = await Subscription.find({ userId: driverUser._id });
     const payload = JSON.stringify({
       title: 'Serah Terima Tugas',
       body: `Anda menerima serah terima untuk ${studentIds.length} siswa. Mohon periksa daftar jemputan Anda.`,
